@@ -35,4 +35,7 @@ endif ()
 
 add_sc_example(sc-html2pdf-demo)
 
-package_sc_module(DEV_DEPENDS "simply-cpp-dev (>= 1.12.0~)" "simply-cpp-litehtml-dev (>= 1.0.2~)" "simply-cpp-pdf-dev (>= 3.1.2~)")
+# Named, not left to dpkg-shlibdeps: sc-pdf's code in this library loads PDFHummus's libPDFWriter,
+# whose package dpkg-shlibdeps can't find (as sc-pdf names it), and sc-graphics' wants an emoji font.
+package_sc_module(DEPENDS simply-cpp-pdfhummus fonts-noto-color-emoji
+        DEV_DEPENDS "simply-cpp-dev (>= 1.12.0~)" "simply-cpp-litehtml-dev (>= 1.0.2~)" "simply-cpp-pdf-dev (>= 3.1.2~)")
