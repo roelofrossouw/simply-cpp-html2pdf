@@ -1,1 +1,1 @@
-HTML to PDF: pages with headers, footers, page numbers, a table of contents, links and bookmarks, through litehtml and PDFHummus
+HTML to PDF: pages with headers, footers, page numbers, a table of contents, links and bookmarks, through litehtml and sc-pdflite
