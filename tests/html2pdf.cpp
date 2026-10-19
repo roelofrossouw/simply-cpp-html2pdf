@@ -57,11 +57,12 @@ int main() {
     SECTION("A section right after a table: the table's last line stays with it");
     {
         // Each table ends where the next section starts; its last row's text reaches a little
-        // past that (its descender), which mustn't push the row onto a page of its own.
+        // past that (its descender), which mustn't push the row onto a page of its own. Each part
+        // is well short of a page, in whichever font the system has for sans-serif.
         std::string html;
         for (int part = 0; part < 3; ++part) {
             html += "<section>Part " + std::to_string(part) + "</section><h2>Part " + std::to_string(part) + "</h2>";
-            for (int i = 0; i < 15; ++i)
+            for (int i = 0; i < 8; ++i)
                 html += "<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore "
                         "magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>";
             html += "<table style='width:100%;border-collapse:collapse'>";
