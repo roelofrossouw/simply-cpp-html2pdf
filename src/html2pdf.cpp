@@ -53,6 +53,21 @@ namespace sc {
             return !split_boxes && bounds_of(item).height() <= page;
         }
 
+        // What a page may not be cut through: its top and bottom, and how far past a cut it may
+        // still reach and stay on the page (a line of text's descender, below its line box when
+        // the line height is tight: not a reason to move the line to the next page).
+        struct kept {
+            double top, bottom, reach = 1.0;
+        };
+
+        // How far an item may reach past a cut and stay on its page: a line of text its descender,
+        // a box a pixel (litehtml rounds boxes to whole pixels, so a table row's border box can
+        // reach a fraction past where the next element starts).
+        double reach_of(const drawing::item &item) {
+            if (std::holds_alternative<label>(item)) return 0.3 * bounds_of(item).height();
+            return 1.0;
+        }
+
         // A section, subsection or subtitle: where it is, and the text it stands for.
         struct marker {
             std::string tag;
@@ -120,12 +135,12 @@ namespace sc {
         // going through text, an image or a box kept whole.
         template<typename Height>
         std::vector<cut> paginate(const drawing &picture, const double total, std::vector<double> breaks,
-                                  std::vector<std::pair<double, double> > whole, Height height) const {
+                                  std::vector<kept> whole, Height height) const {
             const double tallest = std::max(height(0), height(1)); // a box taller than a page is cut after all
             for (const auto &item: picture.items())
                 if (sc::whole(item, settings.split_boxes, tallest)) {
                     const rect box = bounds_of(item);
-                    whole.emplace_back(box.top(), box.bottom());
+                    whole.push_back({box.top(), box.bottom(), reach_of(item)});
                 }
             std::ranges::sort(breaks);
             std::vector<cut> out;
@@ -134,16 +149,16 @@ namespace sc {
                 // At the next hard break, unless there's nothing above it on the page.
                 double hard = start + height(page);
                 for (const double at: breaks)
-                    if (at > start + 0.5 && at < hard && std::ranges::any_of(whole, [&](const auto &box) { return box.first >= start - 0.01 && box.first < at; })) {
+                    if (at > start + 0.5 && at < hard && std::ranges::any_of(whole, [&](const kept &box) { return box.top >= start - 0.01 && box.top < at; })) {
                         hard = at;
                         break;
                     }
                 double end = hard;
                 for (bool moved = true; moved;) {
                     moved = false;
-                    for (const auto &[top, bottom]: whole)
-                        if (top > start + 0.5 && top < end && bottom > end + 0.01) {
-                            end = top;
+                    for (const auto &box: whole)
+                        if (box.top > start + 0.5 && box.top < end && box.bottom > end + box.reach) {
+                            end = box.top;
                             moved = true;
                         }
                 }
@@ -156,7 +171,7 @@ namespace sc {
         }
 
         // The tops of what starts a page, and the boxes kept whole, in a document.
-        static std::pair<std::vector<double>, std::vector<std::pair<double, double> > > breaks_of(const web::html &document) {
+        static std::pair<std::vector<double>, std::vector<kept> > breaks_of(const web::html &document) {
             std::vector<double> breaks;
             for (const auto &element: document.select("section, [style]")) {
                 if (element.name() == "section" || styled(element, "page-break-before", {"always", "page"}) ||
@@ -165,10 +180,10 @@ namespace sc {
                 if (styled(element, "page-break-after", {"always", "page"}) || styled(element, "break-after", {"page", "always"}))
                     breaks.push_back(element.box().bottom());
             }
-            std::vector<std::pair<double, double> > whole;
+            std::vector<kept> whole;
             for (const auto &element: document.select("[style]"))
                 if (styled(element, "page-break-inside", {"avoid"}) || styled(element, "break-inside", {"avoid", "avoid-page"}))
-                    whole.emplace_back(element.box().top(), element.box().bottom());
+                    whole.push_back({element.box().top(), element.box().bottom()});
             return {breaks, whole};
         }
 
@@ -295,13 +310,17 @@ namespace sc {
         // The part of a recorded document a page shows, placed on it and clipped to its area.
         static void draw_part(pdf &file, const drawing &picture, const cut &part, const rect &area) {
             drawing shown;
+            double below = 0; // how far a line's descender reaches past the page's cut
             for (const auto &item: picture.items()) {
                 const rect box = bounds_of(item);
                 if (box.bottom() <= part.top + 0.01 || box.top() >= part.bottom) continue;
+                // What reaches only a little past a cut is on the page its top is on, all of it.
+                if (box.top() < part.top - 0.01 && box.bottom() <= part.top + reach_of(item)) continue;
+                if (box.top() < part.bottom && box.bottom() <= part.bottom + reach_of(item)) below = std::max(below, box.bottom() - part.bottom);
                 shown.add(item);
             }
             shown.apply(transform::translate(0, -part.top).then(transform::scale(points_per_px)).then(transform::translate(area.left(), area.top())));
-            file.push_clip(to_path(rect{area.left(), area.top(), area.width(), (part.bottom - part.top) * points_per_px}));
+            file.push_clip(to_path(rect{area.left(), area.top(), area.width(), (part.bottom - part.top + below) * points_per_px}));
             file.draw(shown);
             file.pop_clip();
         }

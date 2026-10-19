@@ -54,6 +54,29 @@ int main() {
         CHECK_EQ(first.page_count(), 1u); // no empty page before it
     }
 
+    SECTION("A section right after a table: the table's last line stays with it");
+    {
+        // Each table ends where the next section starts; its last row's text reaches a little
+        // past that (its descender), which mustn't push the row onto a page of its own.
+        std::string html;
+        for (int part = 0; part < 3; ++part) {
+            html += "<section>Part " + std::to_string(part) + "</section><h2>Part " + std::to_string(part) + "</h2>";
+            for (int i = 0; i < 15; ++i)
+                html += "<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore "
+                        "magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>";
+            html += "<table style='width:100%;border-collapse:collapse'>";
+            for (int row = 0; row < 10; ++row)
+                html += "<tr><td style='border-top:1px solid #999'>Item " + std::to_string(row) + "</td><td align=right style='border-top:1px solid #999'>" +
+                        std::to_string(row * 10) + ".00</td></tr>";
+            html += "</table>";
+        }
+        sc::html2pdf::options settings;
+        settings.margins.first_top.reset();
+        const sc::html2pdf pdf{"<!DOCTYPE html><html><body style='font-family:sans-serif;font-size:10pt'>" + html + "</body></html>", settings};
+        CHECK_EQ(pdf.page_count(), 3u); // a page a section
+        for (const auto &page: pdf.cuts()) CHECK_LT(100.0, page.bottom - page.top); // no page with just the last row
+    }
+
     SECTION("The first page's top margin leaves room for a letterhead");
     {
         sc::html2pdf::options tall, flat;
