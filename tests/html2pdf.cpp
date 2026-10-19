@@ -1,0 +1,123 @@
+// sc::html2pdf: pages cut between lines, hard breaks, the table of contents' pages, and what the
+// file holds (pages, links, bookmarks, information).
+#include <html2pdf.h>
+
+#include "sc_test.h"
+
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <string>
+
+namespace {
+    const auto directory = std::filesystem::temp_directory_path() / "sc-html2pdf-test";
+
+    std::string read(const std::filesystem::path &path) {
+        std::ifstream file{path, std::ios::binary};
+        return {std::istreambuf_iterator<char>{file}, {}};
+    }
+
+    bool contains(const std::string &text, const std::string &part) { return text.find(part) != std::string::npos; }
+
+    std::size_t count(const std::string &text, const std::string &part) {
+        std::size_t found = 0;
+        for (auto at = text.find(part); at != std::string::npos; at = text.find(part, at + 1)) ++found;
+        return found;
+    }
+
+    // Paragraphs enough for several pages.
+    std::string paragraphs(const int many, const std::string &word = "Lorem") {
+        std::string out;
+        for (int i = 0; i < many; ++i) out += "<p>" + word + " " + std::to_string(i) + " ipsum dolor sit amet, consectetur adipiscing elit.</p>";
+        return out;
+    }
+}
+
+int main() {
+    std::filesystem::create_directories(directory);
+
+    SECTION("Long content flows onto more pages, cut between lines");
+    {
+        const sc::html2pdf pdf{paragraphs(120)};
+        CHECK_LT(1u, pdf.page_count());
+        const auto &cuts = pdf.cuts();
+        CHECK_EQ(cuts.front().top, 0.0);
+        for (std::size_t i = 1; i < cuts.size(); ++i) CHECK_EQ(cuts[i].top, cuts[i - 1].bottom);
+        CHECK_EQ(sc::html2pdf{"<p>short</p>"}.page_count(), 1u);
+    }
+
+    SECTION("A section starts a new page; break styles too");
+    {
+        const sc::html2pdf pdf{"<p>one</p><section>Second</section><p>two</p><div style='page-break-before: always'>three</div>"};
+        CHECK_EQ(pdf.page_count(), 3u);
+        const sc::html2pdf first{"<section>First</section><p>at the top already</p>"};
+        CHECK_EQ(first.page_count(), 1u); // no empty page before it
+    }
+
+    SECTION("The first page's top margin leaves room for a letterhead");
+    {
+        sc::html2pdf::options tall, flat;
+        flat.margins.first_top.reset();
+        const auto many = paragraphs(60);
+        const sc::html2pdf letterhead{many, tall}, plain{many, flat};
+        CHECK_LT(letterhead.cuts().front().bottom, plain.cuts().front().bottom);
+    }
+
+    SECTION("A table of contents on page 2 pushes the content after it");
+    {
+        sc::html2pdf::options settings;
+        settings.toc_page = 2;
+        std::string html = "<subtitle>Part one</subtitle><section>Introduction</section>" + paragraphs(30) +
+                           "<section alt='The middle'>Middle</section>" + paragraphs(30) + "<section>End</section><p>fin</p>";
+        const sc::html2pdf pdf{html, settings};
+        CHECK_EQ(pdf.page_count(), static_cast<unsigned>(pdf.cuts().size()) + 1);
+        const auto path = directory / "toc.pdf";
+        pdf.save(path);
+        const auto file = read(path);
+        CHECK(contains(file, "/Type /Outlines"));
+        CHECK(contains(file, "/Title (Part one)"));
+        CHECK(contains(file, "/Title (The middle)")); // its alt
+        CHECK_LT(std::size_t{2}, count(file, "/Subtype /Link")); // the contents' entries
+    }
+
+    SECTION("Headers and footers with page numbers; links and information");
+    {
+        sc::html2pdf::options settings;
+        settings.header = "<p id='P1Head'>First page</p><p id='POHead'>Page #Page# of #ToPage#</p>";
+        settings.footer = "<p><a href='https://example.com'>example.com</a></p>";
+        settings.metadata["Author"] = "html2pdf test";
+        settings.protection.reset();
+        const sc::html2pdf pdf{"<html><head><title>Report</title></head><body>" + paragraphs(80) + "<p id='end'>The end</p><p><a href='#end'>to the end</a></p></body></html>", settings};
+        const auto path = directory / "headers.pdf";
+        pdf.save(path);
+        const auto file = read(path);
+        CHECK(file.starts_with("%PDF-"));
+        CHECK(contains(file, "/Count " + std::to_string(pdf.page_count())));
+        CHECK(contains(file, "/URI (https://example.com)"));
+        CHECK_EQ(count(file, "/URI (https://example.com)"), static_cast<std::size_t>(pdf.page_count())); // one per footer
+        CHECK(contains(file, "/Title (Report)"));
+        CHECK(contains(file, "/Author (html2pdf test)"));
+        CHECK(contains(file, "/Dest")); // #end
+    }
+
+    SECTION("Passwords");
+    {
+        sc::html2pdf::options settings;
+        settings.protection = sc::pdf::protection{.user_password = "secret"};
+        const auto path = directory / "locked.pdf";
+        sc::html2pdf{"<p>hidden</p>", settings}.save(path);
+        CHECK(contains(read(path), "/Encrypt"));
+    }
+
+    SECTION("Mistakes");
+    {
+        sc::html2pdf::options settings;
+        settings.margins.left = 150;
+        settings.margins.right = 150;
+        CHECK_THROWS_AS(sc::html2pdf("<p>x</p>", settings), std::invalid_argument);
+        CHECK_THROWS_AS(sc::html2pdf{"<p>x</p>"}.save(directory / "no-such-directory" / "x.pdf"), std::runtime_error);
+    }
+
+    std::filesystem::remove_all(directory);
+    TEST_SUMMARY();
+}
