@@ -123,6 +123,20 @@ int main() {
         CHECK(contains(file, "/Dest")); // #end
     }
 
+    SECTION("Built-in fonts: nothing embedded");
+    {
+        sc::html2pdf::options settings;
+        settings.builtin_fonts = true;
+        settings.header = "<p style='font-family: serif'>Page #Page#</p>";
+        const auto path = directory / "builtin.pdf";
+        sc::html2pdf{"<h1>Café</h1><p style='font-family: Arial'>Plain text, € and “quotes”.</p><pre>code</pre>", settings}.save(path);
+        const auto file = read(path);
+        CHECK(contains(file, "/BaseFont /Helvetica-Bold")); // the h1
+        CHECK(contains(file, "/BaseFont /Times-Roman"));    // the header
+        CHECK(contains(file, "/BaseFont /Courier"));        // pre
+        CHECK(!contains(file, "/FontFile"));
+    }
+
     SECTION("Passwords");
     {
         sc::html2pdf::options settings;
