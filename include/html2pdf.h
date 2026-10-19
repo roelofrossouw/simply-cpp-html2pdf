@@ -68,6 +68,12 @@ namespace sc {
             std::map<std::string, std::string> metadata;
             /// Passwords and rights; none leaves the file unencrypted.
             std::optional<pdf::protection> protection;
+            /// Text in PDF's built-in fonts (Helvetica, Times, Courier), which every reader has:
+            /// nothing embedded, smaller files. CSS families map to them (Arial and sans-serif to
+            /// Helvetica, Times New Roman and serif to Times, Courier New and monospace to Courier;
+            /// another installed family stays itself, embedded), measured with Adobe's metrics.
+            /// Characters outside Windows-1252 are embedded from an installed font.
+            bool builtin_fonts = false;
             /// Whether a box's background, border or image may be cut across two pages, as browsers
             /// print them. By default one that fits on a page moves to the next one whole, with
             /// what's in it.

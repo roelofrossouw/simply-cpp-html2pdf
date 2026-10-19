@@ -265,6 +265,7 @@ namespace sc {
         // ------------------------------------------------------------ laying out
 
         impl(const std::string_view html, options given) : settings(std::move(given)) {
+            settings.html.builtin_fonts = settings.builtin_fonts;
             const auto page = page_dimensions(settings.size, settings.turned);
             page_width = page.width();
             page_height = page.height();
@@ -405,6 +406,7 @@ namespace sc {
             std::optional<pdf> file;
             if (settings.protection) file.emplace(path, settings.size, settings.turned, *settings.protection);
             else file.emplace(path, settings.size, settings.turned);
+            file->builtin_fonts(settings.builtin_fonts);
             file->set_page(page_count());
 
             for (std::size_t i = 0; i < cuts.size(); ++i) {

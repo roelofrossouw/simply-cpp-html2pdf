@@ -40,6 +40,11 @@ one whole with what's in it
 `page-break-before: always` (`break-before: page`), starts a new page;
 `page-break-inside: avoid` keeps an element on one page.
 
+**Built-in fonts.** `settings.builtin_fonts = true` sets the text in PDF's built-in Helvetica,
+Times and Courier (CSS families map to them), which every reader has, so no font is embedded:
+smaller files, a little faster. Another installed family named in the CSS stays itself, and
+characters outside Windows-1252 come from an installed font, embedded.
+
 **Headers and footers** are HTML laid out on every page with `#Page#`,
 `#ToPage#` and `#section#`, `#subsection#` and `#subtitle#` (the text of the
 last such element on or before the page; an image's file name becomes the
