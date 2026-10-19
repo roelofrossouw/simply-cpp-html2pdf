@@ -10,8 +10,8 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
 find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.12.0)
 # The HTML engine (litehtml) and the PDF writer (PDFHummus).
-find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 1.0.1)
-find_or_install_package(sc-pdf simply-cpp-pdf-dev simply-cpp-pdf 3.1.1)
+find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 1.0.2)
+find_or_install_package(sc-pdf simply-cpp-pdf-dev simply-cpp-pdf 3.1.2)
 
 set(SOURCE_OBJECTS)
 set(SOURCE_LIBRARIES)
@@ -35,4 +35,4 @@ endif ()
 
 add_sc_example(sc-html2pdf-demo)
 
-package_sc_module(DEV_DEPENDS "simply-cpp-dev (>= 1.12.0~)" "simply-cpp-litehtml-dev (>= 1.0.1~)" "simply-cpp-pdf-dev (>= 3.1.1~)")
+package_sc_module(DEV_DEPENDS "simply-cpp-dev (>= 1.12.0~)" "simply-cpp-litehtml-dev (>= 1.0.2~)" "simply-cpp-pdf-dev (>= 3.1.2~)")

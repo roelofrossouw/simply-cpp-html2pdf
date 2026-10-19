@@ -46,7 +46,7 @@ namespace sc {
         };
 
         struct options {
-            page_size size = page_size::a4;
+            page_size size = page_size::A4;
             orientation turned = orientation::portrait;
             html2pdf::margins margins;
             /// HTML above and below the content of every page (their #variables# filled in).
