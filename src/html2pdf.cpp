@@ -308,17 +308,35 @@ namespace sc {
 
         // ------------------------------------------------------------ writing
 
-        // The part of a recorded document a page shows, placed on it and clipped to its area.
-        static void draw_part(pdf &file, const drawing &picture, const cut &part, const rect &area) {
-            drawing shown;
-            double below = 0; // how far a line's descender reaches past the page's cut
+        // A recorded item's bounds and reach, measured once rather than for every page (text is
+        // measured in its font, which is most of the time a long document takes otherwise).
+        struct measured {
+            rect box;
+            double reach;
+        };
+
+        static std::vector<measured> measured_of(const drawing &picture) {
+            std::vector<measured> out;
+            out.reserve(picture.items().size());
             for (const auto &item: picture.items()) {
                 const rect box = bounds_of(item);
+                out.push_back({box, std::holds_alternative<label>(item) ? 0.3 * box.height() : 1.0}); // reach_of(), measured once
+            }
+            return out;
+        }
+
+        // The part of a recorded document a page shows, placed on it and clipped to its area.
+        static void draw_part(pdf &file, const drawing &picture, const std::vector<measured> &sizes, const cut &part, const rect &area) {
+            drawing shown;
+            double below = 0; // how far a line's descender reaches past the page's cut
+            const auto &items = picture.items();
+            for (std::size_t i = 0; i < items.size(); ++i) {
+                const auto &[box, reach] = sizes[i];
                 if (box.bottom() <= part.top + 0.01 || box.top() >= part.bottom) continue;
                 // What reaches only a little past a cut is on the page its top is on, all of it.
-                if (box.top() < part.top - 0.01 && box.bottom() <= part.top + reach_of(item)) continue;
-                if (box.top() < part.bottom && box.bottom() <= part.bottom + reach_of(item)) below = std::max(below, box.bottom() - part.bottom);
-                shown.add(item);
+                if (box.top() < part.top - 0.01 && box.bottom() <= part.top + reach) continue;
+                if (box.top() < part.bottom && box.bottom() <= part.bottom + reach) below = std::max(below, box.bottom() - part.bottom);
+                shown.add(items[i]);
             }
             shown.apply(transform::translate(0, -part.top).then(transform::scale(points_per_px)).then(transform::translate(area.left(), area.top())));
             file.push_clip(to_path(rect{area.left(), area.top(), area.width(), (part.bottom - part.top + below) * points_per_px}));
@@ -409,15 +427,17 @@ namespace sc {
             file->builtin_fonts(settings.builtin_fonts);
             file->set_page(page_count());
 
+            const auto content_sizes = measured_of(recorded);
             for (std::size_t i = 0; i < cuts.size(); ++i) {
                 const unsigned page = page_of_content(i);
                 file->set_page(page);
-                draw_part(*file, recorded, cuts[i], content_area(page));
+                draw_part(*file, recorded, content_sizes, cuts[i], content_area(page));
             }
+            const auto toc_sizes = measured_of(toc_recorded);
             for (std::size_t i = 0; i < toc_cuts.size(); ++i) {
                 const auto page = static_cast<unsigned>(toc_start + i);
                 file->set_page(page);
-                draw_part(*file, toc_recorded, toc_cuts[i], content_area(page));
+                draw_part(*file, toc_recorded, toc_sizes, toc_cuts[i], content_area(page));
             }
             add_links(*file, *content, [&](const double x, const double y) { return content_place(x, y); }, *content);
             if (toc) add_links(*file, *toc, [&](const double x, const double y) { return toc_place(x, y); }, *content);
