@@ -14,7 +14,7 @@
 
 namespace sc {
     /// HTML as a PDF of pages: the content flows from page to page under a header and over a
-    /// footer, cut between lines of text and images, never through them. Lengths in the HTML are
+    /// footer, cut between lines of text, images and boxes, never through them. Lengths in the HTML are
     /// CSS pixels (a point is 4/3 of one; pt, mm and em work as in print).
     ///
     ///     sc::html2pdf::options settings;
@@ -68,6 +68,10 @@ namespace sc {
             std::map<std::string, std::string> metadata;
             /// Passwords and rights; none leaves the file unencrypted.
             std::optional<pdf::protection> protection;
+            /// Whether a box's background, border or image may be cut across two pages, as browsers
+            /// print them. By default one that fits on a page moves to the next one whole, with
+            /// what's in it.
+            bool split_boxes = false;
             /// Outlines the margins, header and footer areas, to check a layout.
             bool draw_margins = false;
         };
