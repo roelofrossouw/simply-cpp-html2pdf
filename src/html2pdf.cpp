@@ -46,6 +46,13 @@ namespace sc {
         // Text and images are cut between, never through.
         bool atomic(const drawing::item &item) { return !std::holds_alternative<drawable>(item); }
 
+        // So are boxes (backgrounds, borders, a vector image's shapes) that fit on a page, unless
+        // they may be split.
+        bool whole(const drawing::item &item, const bool split_boxes, const double page) {
+            if (atomic(item)) return true;
+            return !split_boxes && bounds_of(item).height() <= page;
+        }
+
         // A section, subsection or subtitle: where it is, and the text it stands for.
         struct marker {
             std::string tag;
@@ -112,10 +119,11 @@ namespace sc {
         // page first: each page ends at the next hard break, or else as low as it can without
         // going through text, an image or a box kept whole.
         template<typename Height>
-        static std::vector<cut> paginate(const drawing &picture, const double total, std::vector<double> breaks,
-                                         std::vector<std::pair<double, double> > whole, Height height) {
+        std::vector<cut> paginate(const drawing &picture, const double total, std::vector<double> breaks,
+                                  std::vector<std::pair<double, double> > whole, Height height) const {
+            const double tallest = std::max(height(0), height(1)); // a box taller than a page is cut after all
             for (const auto &item: picture.items())
-                if (atomic(item)) {
+                if (sc::whole(item, settings.split_boxes, tallest)) {
                     const rect box = bounds_of(item);
                     whole.emplace_back(box.top(), box.bottom());
                 }
@@ -123,14 +131,14 @@ namespace sc {
             std::vector<cut> out;
             double start = 0;
             for (unsigned page = 0; start < total - 0.5; ++page) {
-                const double limit = start + height(page);
-                double end = limit;
-                // A break with nothing (no text or image) above it on the page doesn't count.
+                // At the next hard break, unless there's nothing above it on the page.
+                double hard = start + height(page);
                 for (const double at: breaks)
-                    if (at > start + 0.5 && at < end && std::ranges::any_of(whole, [&](const auto &box) { return box.first >= start - 0.01 && box.first < at; })) {
-                        end = at;
+                    if (at > start + 0.5 && at < hard && std::ranges::any_of(whole, [&](const auto &box) { return box.first >= start - 0.01 && box.first < at; })) {
+                        hard = at;
                         break;
                     }
+                double end = hard;
                 for (bool moved = true; moved;) {
                     moved = false;
                     for (const auto &[top, bottom]: whole)
@@ -139,7 +147,7 @@ namespace sc {
                             moved = true;
                         }
                 }
-                if (end <= start + 0.5) end = limit; // taller than a page: it's cut after all
+                if (end <= start + 0.5) end = hard; // what won't fit on any page is cut after all
                 out.push_back({start, std::min(end, total)});
                 start = end;
             }
@@ -289,8 +297,7 @@ namespace sc {
             drawing shown;
             for (const auto &item: picture.items()) {
                 const rect box = bounds_of(item);
-                if (box.bottom() <= part.top || box.top() >= part.bottom) continue;
-                if (atomic(item) && box.top() < part.top - 0.01 && box.bottom() < part.bottom) continue; // on the page before
+                if (box.bottom() <= part.top + 0.01 || box.top() >= part.bottom) continue;
                 shown.add(item);
             }
             shown.apply(transform::translate(0, -part.top).then(transform::scale(points_per_px)).then(transform::translate(area.left(), area.top())));
