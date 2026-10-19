@@ -13,7 +13,9 @@
 int main(int argc, char **argv) {
     const sc::params args{argc, argv, {
         {"name", "sc-html2pdf-demo"},
-        {"description", "Writes a few pages of HTML as a PDF with sc::html2pdf."},
+        {"description", "Writes a few pages of HTML as a PDF with sc::html2pdf, with a header and footer, page numbers, a "
+                        "table of contents and links, to show what a report comes out like. Open the PDF it writes to have a "
+                        "look.\nMore on the wiki: https://github.com/roelofrossouw/simply-cpp/wiki/HTML-to-PDF"},
         {"positional", {
             {"output", {{"default", (std::filesystem::temp_directory_path() / "sc-html2pdf-demo.pdf").string()},
                         {"help", "the PDF to write"}}}}}}};
