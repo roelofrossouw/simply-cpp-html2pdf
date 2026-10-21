@@ -8,7 +8,7 @@ option(SC_HTML2PDF_BUILD_TESTS "Build simply-cpp-html2pdf tests" ${PROJECT_IS_TO
 get_sc_version()
 message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
-find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.12.0)
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.20.0)
 # The HTML engine (litehtml) and the PDF writer (sc-pdf, on sc-pdflite).
 find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 1.1.1)
 find_or_install_package(sc-pdf simply-cpp-pdf-dev simply-cpp-pdf 4.0.0)
@@ -37,4 +37,4 @@ add_sc_example(sc-html2pdf-demo)
 
 # Named, not left to dpkg-shlibdeps: sc-graphics wants an emoji font.
 package_sc_module(DEPENDS fonts-noto-color-emoji
-        DEV_DEPENDS "simply-cpp-dev (>= 1.12.0~)" "simply-cpp-litehtml-dev (>= 1.1.1~)" "simply-cpp-pdf-dev (>= 4.0.0~)")
+        DEV_DEPENDS "simply-cpp-dev (>= 1.20.0~)" "simply-cpp-litehtml-dev (>= 1.1.1~)" "simply-cpp-pdf-dev (>= 4.0.0~)")
