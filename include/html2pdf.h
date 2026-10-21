@@ -106,6 +106,10 @@ namespace sc {
         /// Writes the PDF; throws std::runtime_error when it can't.
         void save(const std::filesystem::path &file) const;
 
+        /// The PDF save() writes, as bytes (written to a temporary file and read back); throws
+        /// std::runtime_error when it can't.
+        [[nodiscard]] std::string bytes() const;
+
     private:
         struct impl;
         std::unique_ptr<impl> impl_;
