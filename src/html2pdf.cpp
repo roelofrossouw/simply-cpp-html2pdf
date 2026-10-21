@@ -22,7 +22,6 @@ namespace sc {
 
         // The markers are invisible: they only mark where sections start.
         const std::string marker_css = " section, subsection, subtitle { display: block; max-height: 0; overflow: hidden; color: transparent; }";
-        // A header's #P1Head shows on the first page only, its #POHead on the others.
         const std::string first_page_css = " #POHead { display: none; } #FakeHeaders { display: none; }";
         const std::string other_page_css = " #P1Head { display: none; }";
 
@@ -57,16 +56,15 @@ namespace sc {
             return !split_boxes && box.height() <= page;
         }
 
-        // What a page may not be cut through: its top and bottom, and how far past a cut it may
-        // still reach and stay on the page (a line of text's descender, below its line box when
-        // the line height is tight: not a reason to move the line to the next page).
+        // What a page may not be cut through, and how far past a cut it may reach (reach_of()).
         struct kept {
             double top, bottom, reach = 1.0;
         };
 
-        // How far an item may reach past a cut and stay on its page: a line of text its descender,
-        // a box a pixel (litehtml rounds boxes to whole pixels, so a table row's border box can
-        // reach a fraction past where the next element starts).
+        // How far an item may reach past a cut and stay on its page: a line of text its descender
+        // (below its line box when the line height is tight: no reason to move the line to the
+        // next page), a box a pixel (litehtml rounds boxes to whole pixels, so a table row's border
+        // box can reach a fraction past where the next element starts).
         double reach_of(const drawing::item &item, const rect &box) {
             if (std::holds_alternative<label>(item)) return 0.3 * box.height();
             return 1.0;
@@ -103,7 +101,6 @@ namespace sc {
         double width = 0;                        // the content's, px
         double header_first = 0, header_other = 0, footer = 0; // heights, px
 
-        // The content: laid out, recorded, cut into pages.
         std::optional<web::html> content;
         drawing recorded;
         std::vector<measured> recorded_sizes;
@@ -117,8 +114,6 @@ namespace sc {
         std::vector<cut> toc_cuts;
         unsigned toc_start = 0; // the page it starts on; 0 for none
 
-        // ------------------------------------------------------------ the page's areas
-
         [[nodiscard]] double margin_top(const unsigned page) const {
             return points(page == 1 && settings.margins.first_top ? *settings.margins.first_top : settings.margins.top);
         }
@@ -131,8 +126,6 @@ namespace sc {
             const double bottom = page_height - points(settings.margins.bottom) - footer * points_per_px;
             return {points(settings.margins.left), top, width * points_per_px, std::max(1.0, bottom - top)};
         }
-
-        // ------------------------------------------------------------ numbering
 
         [[nodiscard]] unsigned toc_count() const { return static_cast<unsigned>(toc_cuts.size()); }
 
@@ -152,8 +145,6 @@ namespace sc {
                 if (y < pages[i].bottom - 1e-6) return i;
             return pages.empty() ? 0 : pages.size() - 1;
         }
-
-        // ------------------------------------------------------------ cutting into pages
 
         // Cuts a recorded document into pages, its page i (from 0) landing on page_of(i): each page
         // ends at the next hard break, or else as low as it can without going through text, an
@@ -223,8 +214,6 @@ namespace sc {
             cuts = paginate(recorded, recorded_sizes, total, breaks, whole, [&](const std::size_t i) { return page_of_content(i); });
         }
 
-        // ------------------------------------------------------------ variables
-
         // A marker's text for #tag# on a page: the first on the latest page up to it that has one.
         [[nodiscard]] std::string variable(const std::string &tag, const unsigned page) const {
             std::string value;
@@ -262,8 +251,6 @@ namespace sc {
             return document;
         }
 
-        // ------------------------------------------------------------ the table of contents
-
         [[nodiscard]] std::string toc_html() const {
             std::string out = "<div class=\"toc\"><h1 class=\"title\">" + settings.toc_title + "</h1>";
             for (const auto &each: markers) {
@@ -288,8 +275,6 @@ namespace sc {
             toc_cuts = paginate(toc_recorded, toc_sizes, total_of(*toc, toc_recorded), breaks, whole,
                                 [&](const std::size_t i) { return page_of_toc(i); });
         }
-
-        // ------------------------------------------------------------ laying out
 
         impl(const std::string_view html, options given) : settings(std::move(given)) {
             settings.html.builtin_fonts = settings.builtin_fonts;
@@ -334,9 +319,6 @@ namespace sc {
             }
         }
 
-        // ------------------------------------------------------------ writing
-
-        // The part of a recorded document a page shows, placed on it and clipped to its area.
         template<typename PageOf>
         void draw_pages(pdf &file, const drawing &picture, const std::vector<measured> &sizes, const std::vector<cut> &pages,
                         PageOf page_of) const {
@@ -347,6 +329,7 @@ namespace sc {
             }
         }
 
+        // The part of a recorded document a page shows, placed on it and clipped to its area.
         static void draw_part(pdf &file, const drawing &picture, const std::vector<measured> &sizes, const cut &part, const rect &area) {
             drawing shown;
             double below = 0; // how far a line's descender reaches past the page's cut
@@ -388,7 +371,7 @@ namespace sc {
             return place(toc_cuts, [&](const std::size_t i) { return page_of_toc(i); }, x, y);
         }
 
-        // The links in a document drawn at (left, top) on page (px to points), or cut into pages.
+        // The links in a document, where(x, y) placing a point of it (px) on its page.
         void add_links(pdf &file, const web::html &document, const std::function<std::optional<placed>(double, double)> &where,
                        const web::html &targets) const {
             for (const auto &link: document.select("a[href]")) {
