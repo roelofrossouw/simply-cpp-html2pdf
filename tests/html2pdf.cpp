@@ -138,6 +138,17 @@ int main() {
         CHECK(!contains(file, "/FontFile"));
     }
 
+    SECTION("The PDF as bytes, as save() writes it");
+    {
+        const sc::html2pdf pdf{"<html><head><title>In memory</title></head><body>" + paragraphs(40) + "</body></html>"};
+        const auto bytes = pdf.bytes();
+        const auto path = directory / "bytes.pdf";
+        pdf.save(path);
+        CHECK(bytes.starts_with("%PDF-"));
+        CHECK(contains(bytes, "/Title (In memory)"));
+        CHECK_EQ(bytes.size(), read(path).size());
+    }
+
     SECTION("Passwords");
     {
         sc::html2pdf::options settings;

@@ -4,10 +4,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <fstream>
 #include <functional>
+#include <iterator>
 #include <stdexcept>
 #include <utility>
 #include <variant>
+
+#include <unistd.h>
 
 namespace sc {
     namespace {
@@ -33,8 +38,7 @@ namespace sc {
             return html;
         }
 
-        bool styled(const web::html::element &element, const std::string_view property, const std::initializer_list<std::string_view> values) {
-            const auto style = web::style{element.attribute("style").value_or("")};
+        bool styled(const web::style &style, const std::string_view property, const std::initializer_list<std::string_view> values) {
             const auto value = style.value(property);
             return value && std::ranges::any_of(values, [&](const std::string_view wanted) { return *value == wanted; });
         }
@@ -48,9 +52,9 @@ namespace sc {
 
         // So are boxes (backgrounds, borders, a vector image's shapes) that fit on a page, unless
         // they may be split.
-        bool whole(const drawing::item &item, const bool split_boxes, const double page) {
+        bool whole(const drawing::item &item, const rect &box, const bool split_boxes, const double page) {
             if (atomic(item)) return true;
-            return !split_boxes && bounds_of(item).height() <= page;
+            return !split_boxes && box.height() <= page;
         }
 
         // What a page may not be cut through: its top and bottom, and how far past a cut it may
@@ -63,9 +67,26 @@ namespace sc {
         // How far an item may reach past a cut and stay on its page: a line of text its descender,
         // a box a pixel (litehtml rounds boxes to whole pixels, so a table row's border box can
         // reach a fraction past where the next element starts).
-        double reach_of(const drawing::item &item) {
-            if (std::holds_alternative<label>(item)) return 0.3 * bounds_of(item).height();
+        double reach_of(const drawing::item &item, const rect &box) {
+            if (std::holds_alternative<label>(item)) return 0.3 * box.height();
             return 1.0;
+        }
+
+        // A recorded item's bounds and reach, measured once rather than for every page (text is
+        // measured in its font, which is most of the time a long document takes otherwise).
+        struct measured {
+            rect box;
+            double reach;
+        };
+
+        std::vector<measured> measured_of(const drawing &picture) {
+            std::vector<measured> out;
+            out.reserve(picture.items().size());
+            for (const auto &item: picture.items()) {
+                const rect box = bounds_of(item);
+                out.push_back({box, reach_of(item, box)});
+            }
+            return out;
         }
 
         // A section, subsection or subtitle: where it is, and the text it stands for.
@@ -85,12 +106,14 @@ namespace sc {
         // The content: laid out, recorded, cut into pages.
         std::optional<web::html> content;
         drawing recorded;
+        std::vector<measured> recorded_sizes;
         std::vector<cut> cuts;
         std::vector<marker> markers;
 
         // The table of contents, when there's one.
         std::optional<web::html> toc;
         drawing toc_recorded;
+        std::vector<measured> toc_sizes;
         std::vector<cut> toc_cuts;
         unsigned toc_start = 0; // the page it starts on; 0 for none
 
@@ -119,6 +142,8 @@ namespace sc {
             return toc_start && page >= toc_start ? page + toc_count() : page;
         }
 
+        [[nodiscard]] unsigned page_of_toc(const std::size_t i) const { return static_cast<unsigned>(toc_start + i); }
+
         [[nodiscard]] unsigned page_count() const { return static_cast<unsigned>(cuts.size()) + toc_count(); }
 
         // The content page holding y (px), from 0.
@@ -130,18 +155,18 @@ namespace sc {
 
         // ------------------------------------------------------------ cutting into pages
 
-        // Cuts a recorded document into pages as tall as height(page) says (px), the first being
-        // page first: each page ends at the next hard break, or else as low as it can without
-        // going through text, an image or a box kept whole.
-        template<typename Height>
-        std::vector<cut> paginate(const drawing &picture, const double total, std::vector<double> breaks,
-                                  std::vector<kept> whole, Height height) const {
+        // Cuts a recorded document into pages, its page i (from 0) landing on page_of(i): each page
+        // ends at the next hard break, or else as low as it can without going through text, an
+        // image or a box kept whole.
+        template<typename PageOf>
+        std::vector<cut> paginate(const drawing &picture, const std::vector<measured> &sizes, const double total,
+                                  std::vector<double> breaks, std::vector<kept> whole, PageOf page_of) const {
+            const auto height = [&](const std::size_t i) { return content_area(page_of(i)).height() / points_per_px; };
             const double tallest = std::max(height(0), height(1)); // a box taller than a page is cut after all
-            for (const auto &item: picture.items())
-                if (sc::whole(item, settings.split_boxes, tallest)) {
-                    const rect box = bounds_of(item);
-                    whole.push_back({box.top(), box.bottom(), reach_of(item)});
-                }
+            const auto &items = picture.items();
+            for (std::size_t i = 0; i < items.size(); ++i)
+                if (sc::whole(items[i], sizes[i].box, settings.split_boxes, tallest))
+                    whole.push_back({sizes[i].box.top(), sizes[i].box.bottom(), sizes[i].reach});
             std::ranges::sort(breaks);
             std::vector<cut> out;
             double start = 0;
@@ -173,17 +198,18 @@ namespace sc {
         // The tops of what starts a page, and the boxes kept whole, in a document.
         static std::pair<std::vector<double>, std::vector<kept> > breaks_of(const web::html &document) {
             std::vector<double> breaks;
-            for (const auto &element: document.select("section, [style]")) {
-                if (element.name() == "section" || styled(element, "page-break-before", {"always", "page"}) ||
-                    styled(element, "break-before", {"page", "always"}))
-                    breaks.push_back(element.box().top());
-                if (styled(element, "page-break-after", {"always", "page"}) || styled(element, "break-after", {"page", "always"}))
-                    breaks.push_back(element.box().bottom());
-            }
             std::vector<kept> whole;
-            for (const auto &element: document.select("[style]"))
-                if (styled(element, "page-break-inside", {"avoid"}) || styled(element, "break-inside", {"avoid", "avoid-page"}))
-                    whole.push_back({element.box().top(), element.box().bottom()});
+            for (const auto &element: document.select("section, [style]")) {
+                const web::style style{element.attribute("style").value_or("")};
+                const rect box = element.box();
+                if (element.name() == "section" || styled(style, "page-break-before", {"always", "page"}) ||
+                    styled(style, "break-before", {"page", "always"}))
+                    breaks.push_back(box.top());
+                if (styled(style, "page-break-after", {"always", "page"}) || styled(style, "break-after", {"page", "always"}))
+                    breaks.push_back(box.bottom());
+                if (styled(style, "page-break-inside", {"avoid"}) || styled(style, "break-inside", {"avoid", "avoid-page"}))
+                    whole.push_back({box.top(), box.bottom()});
+            }
             return {breaks, whole};
         }
 
@@ -194,7 +220,7 @@ namespace sc {
         void paginate_content() {
             const auto [breaks, whole] = breaks_of(*content);
             const double total = total_of(*content, recorded);
-            cuts = paginate(recorded, total, breaks, whole, [&](const unsigned i) { return content_area(page_of_content(i)).height() / points_per_px; });
+            cuts = paginate(recorded, recorded_sizes, total, breaks, whole, [&](const std::size_t i) { return page_of_content(i); });
         }
 
         // ------------------------------------------------------------ variables
@@ -257,9 +283,10 @@ namespace sc {
             toc.emplace(toc_html(), options);
             toc->layout(width);
             toc_recorded = toc->drawing();
+            toc_sizes = measured_of(toc_recorded);
             const auto [breaks, whole] = breaks_of(*toc);
-            toc_cuts = paginate(toc_recorded, total_of(*toc, toc_recorded), breaks, whole,
-                                [&](const unsigned i) { return content_area(toc_start + i).height() / points_per_px; });
+            toc_cuts = paginate(toc_recorded, toc_sizes, total_of(*toc, toc_recorded), breaks, whole,
+                                [&](const std::size_t i) { return page_of_toc(i); });
         }
 
         // ------------------------------------------------------------ laying out
@@ -284,6 +311,7 @@ namespace sc {
             content.emplace(prepared(std::string{html}), options);
             content->layout(width);
             recorded = content->drawing();
+            recorded_sizes = measured_of(recorded);
             for (const auto &element: content->select("section, subsection, subtitle")) {
                 auto text = element.attribute("alt").value_or("");
                 if (text.empty()) text = element.text();
@@ -308,24 +336,17 @@ namespace sc {
 
         // ------------------------------------------------------------ writing
 
-        // A recorded item's bounds and reach, measured once rather than for every page (text is
-        // measured in its font, which is most of the time a long document takes otherwise).
-        struct measured {
-            rect box;
-            double reach;
-        };
-
-        static std::vector<measured> measured_of(const drawing &picture) {
-            std::vector<measured> out;
-            out.reserve(picture.items().size());
-            for (const auto &item: picture.items()) {
-                const rect box = bounds_of(item);
-                out.push_back({box, std::holds_alternative<label>(item) ? 0.3 * box.height() : 1.0}); // reach_of(), measured once
+        // The part of a recorded document a page shows, placed on it and clipped to its area.
+        template<typename PageOf>
+        void draw_pages(pdf &file, const drawing &picture, const std::vector<measured> &sizes, const std::vector<cut> &pages,
+                        PageOf page_of) const {
+            for (std::size_t i = 0; i < pages.size(); ++i) {
+                const unsigned page = page_of(i);
+                file.set_page(page);
+                draw_part(file, picture, sizes, pages[i], content_area(page));
             }
-            return out;
         }
 
-        // The part of a recorded document a page shows, placed on it and clipped to its area.
         static void draw_part(pdf &file, const drawing &picture, const std::vector<measured> &sizes, const cut &part, const rect &area) {
             drawing shown;
             double below = 0; // how far a line's descender reaches past the page's cut
@@ -349,6 +370,23 @@ namespace sc {
             unsigned page;
             double x, y;
         };
+
+        template<typename PageOf>
+        [[nodiscard]] placed place(const std::vector<cut> &pages, PageOf page_of, const double x, const double y) const {
+            const auto i = cut_at(pages, y);
+            const unsigned page = page_of(i);
+            const rect area = content_area(page);
+            return {page, area.left() + x * points_per_px, area.top() + (y - pages[i].top) * points_per_px};
+        }
+
+        [[nodiscard]] std::optional<placed> content_place(const double x, const double y) const {
+            return place(cuts, [&](const std::size_t i) { return page_of_content(i); }, x, y);
+        }
+
+        [[nodiscard]] std::optional<placed> toc_place(const double x, const double y) const {
+            if (toc_cuts.empty()) return std::nullopt;
+            return place(toc_cuts, [&](const std::size_t i) { return page_of_toc(i); }, x, y);
+        }
 
         // The links in a document drawn at (left, top) on page (px to points), or cut into pages.
         void add_links(pdf &file, const web::html &document, const std::function<std::optional<placed>(double, double)> &where,
@@ -378,21 +416,6 @@ namespace sc {
                     file.add_link(web::html::resolve(href, settings.html.base_url), area);
                 }
             }
-        }
-
-        [[nodiscard]] std::optional<placed> content_place(const double x, const double y) const {
-            const auto i = cut_at(cuts, y);
-            const unsigned page = page_of_content(i);
-            const rect area = content_area(page);
-            return placed{page, area.left() + x * points_per_px, area.top() + (y - cuts[i].top) * points_per_px};
-        }
-
-        [[nodiscard]] std::optional<placed> toc_place(const double x, const double y) const {
-            if (toc_cuts.empty()) return std::nullopt;
-            const auto i = cut_at(toc_cuts, y);
-            const auto page = static_cast<unsigned>(toc_start + i);
-            const rect area = content_area(page);
-            return placed{page, area.left() + x * points_per_px, area.top() + (y - toc_cuts[i].top) * points_per_px};
         }
 
         void add_outline(pdf &file) const {
@@ -427,18 +450,8 @@ namespace sc {
             file->builtin_fonts(settings.builtin_fonts);
             file->set_page(page_count());
 
-            const auto content_sizes = measured_of(recorded);
-            for (std::size_t i = 0; i < cuts.size(); ++i) {
-                const unsigned page = page_of_content(i);
-                file->set_page(page);
-                draw_part(*file, recorded, content_sizes, cuts[i], content_area(page));
-            }
-            const auto toc_sizes = measured_of(toc_recorded);
-            for (std::size_t i = 0; i < toc_cuts.size(); ++i) {
-                const auto page = static_cast<unsigned>(toc_start + i);
-                file->set_page(page);
-                draw_part(*file, toc_recorded, toc_sizes, toc_cuts[i], content_area(page));
-            }
+            draw_pages(*file, recorded, recorded_sizes, cuts, [&](const std::size_t i) { return page_of_content(i); });
+            draw_pages(*file, toc_recorded, toc_sizes, toc_cuts, [&](const std::size_t i) { return page_of_toc(i); });
             add_links(*file, *content, [&](const double x, const double y) { return content_place(x, y); }, *content);
             if (toc) add_links(*file, *toc, [&](const double x, const double y) { return toc_place(x, y); }, *content);
 
@@ -488,4 +501,24 @@ namespace sc {
     const std::vector<html2pdf::cut> &html2pdf::cuts() const { return impl_->cuts; }
 
     void html2pdf::save(const std::filesystem::path &file) const { impl_->save(file); }
+
+    std::string html2pdf::bytes() const {
+        // sc::pdf only writes files.
+        std::string name = (std::filesystem::temp_directory_path() / "sc-html2pdf-XXXXXX").string();
+        const int descriptor = mkstemp(name.data());
+        if (descriptor < 0) throw std::runtime_error("sc::html2pdf: can't make a temporary file in " + std::filesystem::temp_directory_path().string());
+        ::close(descriptor);
+        const std::filesystem::path path{name};
+        struct removed {
+            const std::filesystem::path &path;
+            ~removed() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } guard{path};
+        impl_->save(path);
+        std::ifstream in{path, std::ios::binary};
+        if (!in) throw std::runtime_error("sc::html2pdf: can't read back " + name);
+        return {std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
+    }
 }
