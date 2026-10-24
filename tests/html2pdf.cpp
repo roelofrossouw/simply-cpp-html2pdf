@@ -124,6 +124,27 @@ int main() {
         CHECK(contains(file, "/Dest")); // #end
     }
 
+    SECTION("Images: a footer's logo written once for every page; a big PNG scaled down to 150 pixels an inch");
+    {
+        // banner.png is 600 by 200 pixels, shown at most 2 inches wide (192 px): 300 by 100 at 150 per inch.
+        const std::string banner = SC_HTML2PDF_TEST_BANNER;
+        sc::html2pdf::options settings;
+        settings.footer = "<img src='" + banner + "' style='width: 96px'>";
+        const sc::html2pdf pdf{"<img src='" + banner + "' style='width: 192px'>" + paragraphs(80), settings};
+        CHECK_LT(2u, pdf.page_count());
+        const auto path = directory / "images.pdf";
+        pdf.save(path);
+        auto file = read(path);
+        CHECK_EQ(count(file, "/Subtype /Image"), std::size_t{1});
+        CHECK(contains(file, "/Width 300 /Height 100 "));
+
+        settings.image_resolution = 0; // kept as it is
+        sc::html2pdf{"<img src='" + banner + "' style='width: 192px'>" + paragraphs(80), settings}.save(path);
+        file = read(path);
+        CHECK_EQ(count(file, "/Subtype /Image"), std::size_t{1});
+        CHECK(contains(file, "/Width 600 /Height 200 "));
+    }
+
     SECTION("Built-in fonts: nothing embedded");
     {
         sc::html2pdf::options settings;

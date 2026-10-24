@@ -45,6 +45,11 @@ Times and Courier (CSS families map to them), which every reader has, so no font
 smaller files, a little faster. Another installed family named in the CSS stays itself, and
 characters outside Windows-1252 come from an installed font, embedded.
 
+**Images** are read once and written into the file once, however many pages show them (a logo in
+the footer). PNGs are written at most about `settings.image_resolution` pixels an inch where
+they're shown (150 by default; 0 keeps them as they are): a scan or photo bigger than that is
+scaled down. JPEGs are written as they are.
+
 **Headers and footers** are HTML laid out on every page with `#Page#`,
 `#ToPage#` and `#section#`, `#subsection#` and `#subtitle#` (the text of the
 last such element on or before the page; an image's file name becomes the

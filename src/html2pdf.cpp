@@ -278,6 +278,7 @@ namespace sc {
 
         impl(const std::string_view html, options given) : settings(std::move(given)) {
             settings.html.builtin_fonts = settings.builtin_fonts;
+            if (!settings.html.images) settings.html.images.emplace(); // the header and footer, laid out for every page, read their images once
             const auto page = page_dimensions(settings.size, settings.turned);
             page_width = page.width();
             page_height = page.height();
@@ -431,6 +432,7 @@ namespace sc {
             if (settings.protection) file.emplace(path, settings.size, settings.turned, *settings.protection);
             else file.emplace(path, settings.size, settings.turned);
             file->builtin_fonts(settings.builtin_fonts);
+            file->image_resolution(settings.image_resolution);
             file->set_page(page_count());
 
             draw_pages(*file, recorded, recorded_sizes, cuts, [&](const std::size_t i) { return page_of_content(i); });
