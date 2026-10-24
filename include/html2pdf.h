@@ -55,7 +55,9 @@ namespace sc {
             /// CSS for the content, header and footer, after the defaults and before their own.
             std::string css;
             /// The content's base URL, its fonts, @media type and fetching (sc::web::html_options;
-            /// its css is replaced by the one above).
+            /// its css is replaced by the one above). The content, header, footer and table of
+            /// contents share its image cache, given one or not: each image is read once, and
+            /// written into the file once.
             web::html_options html;
             /// The page the table of contents starts on (pushing what was there after it); 0 for
             /// none. Its title, and the outline (bookmarks) made of its entries, or else of the
@@ -80,6 +82,10 @@ namespace sc {
             bool split_boxes = false;
             /// Outlines the margins, header and footer areas, to check a layout.
             bool draw_margins = false;
+            /// PNG images are written at most about this many pixels per inch, at the biggest size
+            /// they're shown: bigger ones are scaled down (sc::pdf::image_resolution()). JPEGs are
+            /// written as they are. 0 keeps every image as it is.
+            double image_resolution = 150;
         };
 
         /// Where the content was cut: each page's top and bottom in the laid out content (px).
