@@ -21,6 +21,9 @@ add_sc_object(html2pdf
         LINK_LIBRARIES sc::sc-litehtml sc::sc-pdf
         PUBLIC_LINK_LIBRARIES sc::sc-litehtml sc::sc-pdf)
 
+# The Producer files are written with by default.
+target_compile_definitions(sc-obj-html2pdf PRIVATE SC_HTML2PDF_VERSION="${SC_VERSION}")
+
 add_sc_libraries(DESCRIPTION "simply-cpp-html2pdf")
 
 install_sc_module(PATH_VARS CMAKE_INSTALL_INCLUDEDIR)
