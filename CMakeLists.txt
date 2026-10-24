@@ -10,8 +10,8 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
 find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.20.0)
 # The HTML engine (litehtml) and the PDF writer (sc-pdf, on sc-pdflite).
-find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 1.2.3)
-find_or_install_package(sc-pdf simply-cpp-pdf-dev simply-cpp-pdf 4.0.1)
+find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 1.3.0)
+find_or_install_package(sc-pdf simply-cpp-pdf-dev simply-cpp-pdf 4.1.0)
 
 set(SOURCE_OBJECTS)
 set(SOURCE_LIBRARIES)
