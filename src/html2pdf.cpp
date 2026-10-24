@@ -1,5 +1,6 @@
 #include "html2pdf.h"
 
+#include <pdflite/document.h>
 #include <style.h>
 
 #include <algorithm>
@@ -465,7 +466,7 @@ namespace sc {
             if (settings.outline) add_outline(*file);
             auto metadata = settings.metadata;
             if (!metadata.contains("Title") && !content->title().empty()) metadata["Title"] = content->title();
-            if (!metadata.contains("Producer")) metadata["Producer"] = "simply-cpp html2pdf";
+            if (!metadata.contains("Producer")) metadata["Producer"] = "simply-cpp-html2pdf " SC_HTML2PDF_VERSION " (simply-cpp-pdflite " + std::string{pdflite::version()} + ")";
             for (const auto &[key, value]: metadata) file->metadata(key, value);
             file->close();
         }

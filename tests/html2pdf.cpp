@@ -1,6 +1,7 @@
 // sc::html2pdf: pages cut between lines, hard breaks, the table of contents' pages, and what the
 // file holds (pages, links, bookmarks, information).
 #include <html2pdf.h>
+#include <pdflite/document.h>
 
 #include "sc_test.h"
 
@@ -121,6 +122,8 @@ int main() {
         CHECK_EQ(count(file, "/URI (https://example.com)"), static_cast<std::size_t>(pdf.page_count())); // one per footer
         CHECK(contains(file, "/Title (Report)"));
         CHECK(contains(file, "/Author (html2pdf test)"));
+        CHECK(contains(file, "/Producer (simply-cpp-html2pdf "));
+        CHECK(contains(file, "simply-cpp-pdflite " + std::string{sc::pdflite::version()})); // in brackets after it
         CHECK(contains(file, "/Dest")); // #end
     }
 

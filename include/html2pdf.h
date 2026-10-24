@@ -66,7 +66,8 @@ namespace sc {
             std::string toc_title = "Table of Contents";
             bool outline = true;
             /// "Title", "Author", "Subject", "Keywords", "Creator", "Producer" or your own; the title
-            /// defaults to the HTML's <title>.
+            /// defaults to the HTML's <title>, the producer to "simply-cpp-html2pdf 1.4.1
+            /// (simply-cpp-pdflite 4.6.0)", their versions.
             std::map<std::string, std::string> metadata;
             /// Passwords and rights; none leaves the file unencrypted.
             std::optional<pdf::protection> protection;
