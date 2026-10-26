@@ -10,7 +10,7 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
 find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.20.0)
 # The HTML engine (litehtml) and the PDF writer (sc-pdf, on sc-pdflite).
-find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 1.3.0)
+find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 1.4.0)
 find_or_install_package(sc-pdf simply-cpp-pdf-dev simply-cpp-pdf 4.1.0)
 # sc::pdflite::version(), for the Producer, since 4.6.0.
 find_or_install_package(sc-pdflite simply-cpp-pdflite-dev simply-cpp-pdflite 4.6.0)
@@ -42,4 +42,4 @@ add_sc_example(sc-html2pdf-demo)
 
 # Named, not left to dpkg-shlibdeps: sc-graphics wants an emoji font.
 package_sc_module(DEPENDS fonts-noto-color-emoji "simply-cpp-pdflite (>= 4.6.0~)"
-        DEV_DEPENDS "simply-cpp-dev (>= 1.20.0~)" "simply-cpp-litehtml-dev (>= 1.3.0~)" "simply-cpp-pdf-dev (>= 4.1.0~)" "simply-cpp-pdflite-dev (>= 4.6.0~)")
+        DEV_DEPENDS "simply-cpp-dev (>= 1.20.0~)" "simply-cpp-litehtml-dev (>= 1.4.0~)" "simply-cpp-pdf-dev (>= 4.1.0~)" "simply-cpp-pdflite-dev (>= 4.6.0~)")
