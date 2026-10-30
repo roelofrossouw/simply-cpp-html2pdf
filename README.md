@@ -67,11 +67,14 @@ anything else is resolved against the base URL.
 ## Demo
 
 `sc-html2pdf-demo [OUTPUT]` writes a few pages with a header, footer, table of
-contents and links:
+contents, links and a QR code (a `qr:` image):
 
 <!-- sc-example: examples/sc-html2pdf-demo.cpp -->
 ```cpp
-std::string body = "<h1>A report</h1><p>Written by sc::html2pdf from HTML and CSS.</p>";
+// A qr: image is a QR code of what follows the comma, drawn as shapes: sharp at any size.
+std::string body = "<h1>A report</h1><p>Written by sc::html2pdf from HTML and CSS.</p>"
+                   "<p><img src='qr:correction=M,https://github.com/roelofrossouw/simply-cpp' style='width: 25mm'><br>"
+                   "<small>Scan it for simply-cpp.</small></p>";
 for (const auto *part: {"Introduction", "Figures", "Conclusion"}) {
     body += std::string{"<section>"} + part + "</section><h2>" + part + "</h2>";
     for (int i = 0; i < 12; ++i)

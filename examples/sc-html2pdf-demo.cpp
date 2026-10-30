@@ -1,5 +1,5 @@
 // Writes a few pages of HTML as a PDF with sc::html2pdf: a header with page numbers, a footer, a
-// table of contents on page 2, sections, a table and links. --help lists the options.
+// table of contents on page 2, sections, a table, links and a QR code. --help lists the options.
 
 #include <filesystem>
 #include <iostream>
@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
     const sc::params args{argc, argv, {
         {"name", "sc-html2pdf-demo"},
         {"description", "Writes a few pages of HTML as a PDF with sc::html2pdf, with a header and footer, page numbers, a "
-                        "table of contents and links, to show what a report comes out like. Open the PDF it writes to have a "
+                        "table of contents, links and a QR code, to show what a report comes out like. Open the PDF it writes to have a "
                         "look.\nMore on the wiki: https://github.com/roelofrossouw/simply-cpp/wiki/HTML-to-PDF"},
         {"positional", {
             {"output", {{"default", (std::filesystem::temp_directory_path() / "sc-html2pdf-demo.pdf").string()},
@@ -25,7 +25,10 @@ int main(int argc, char **argv) {
         const std::filesystem::path output = args.as<std::string>("output");
 
         // [readme]
-        std::string body = "<h1>A report</h1><p>Written by sc::html2pdf from HTML and CSS.</p>";
+        // A qr: image is a QR code of what follows the comma, drawn as shapes: sharp at any size.
+        std::string body = "<h1>A report</h1><p>Written by sc::html2pdf from HTML and CSS.</p>"
+                           "<p><img src='qr:correction=M,https://github.com/roelofrossouw/simply-cpp' style='width: 25mm'><br>"
+                           "<small>Scan it for simply-cpp.</small></p>";
         for (const auto *part: {"Introduction", "Figures", "Conclusion"}) {
             body += std::string{"<section>"} + part + "</section><h2>" + part + "</h2>";
             for (int i = 0; i < 12; ++i)
