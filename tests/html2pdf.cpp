@@ -148,6 +148,25 @@ int main() {
         CHECK(contains(file, "/Width 600 /Height 200 "));
     }
 
+    SECTION("A section whose text is an image's path: the image in #section#, its alt in the table of contents");
+    {
+        const std::string banner = SC_HTML2PDF_TEST_BANNER;
+        sc::html2pdf::options settings;
+        settings.header = "<table><tr><td style='width: 100px'>#section#</td></tr></table>";
+        settings.toc_page = 1;
+        const auto path = directory / "section-image.pdf";
+        sc::html2pdf{"<section alt='Details of Brokerage'>\n  " + banner + "\n</section>" + paragraphs(20), settings}.save(path);
+        auto file = read(path);
+        CHECK_EQ(count(file, "/Subtype /Image"), std::size_t{1}); // the banner in the header, written once
+        CHECK(contains(file, "Details of Brokerage"));             // the table of contents and outline
+        CHECK(!contains(file, "banner.png"));                      // the path itself isn't text anywhere
+
+        // A section of text shows its text, as before.
+        sc::html2pdf{"<section alt='Cover'>Cover page</section>" + paragraphs(20), settings}.save(path);
+        file = read(path);
+        CHECK_EQ(count(file, "/Subtype /Image"), std::size_t{0});
+    }
+
     SECTION("Built-in fonts: nothing embedded");
     {
         sc::html2pdf::options settings;

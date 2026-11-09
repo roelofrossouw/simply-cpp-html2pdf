@@ -4,6 +4,7 @@
 #include <style.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -91,9 +92,37 @@ namespace sc {
         // A section, subsection or subtitle: where it is, and the text it stands for.
         struct marker {
             std::string tag;
-            std::string text;
+            std::string text;  // its alt, else its text: the table of contents' and outline's entry
+            std::string image; // its text when that's an image's path (logo.png): what #tag# shows
             double top;
         };
+
+        // Whether text is an image's path or URL: one word ending in .png, .jpg, .jpeg, .gif or .svg.
+        bool image_path(const std::string_view text) {
+            if (text.empty() || std::ranges::any_of(text, [](const char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; })) return false;
+            std::string lower{text};
+            for (auto &c: lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            return std::ranges::any_of(std::initializer_list<std::string_view>{".png", ".jpg", ".jpeg", ".gif", ".svg"},
+                                       [&](const std::string_view end) { return lower.ends_with(end); });
+        }
+
+        std::string trimmed(const std::string_view text) {
+            const auto start = text.find_first_not_of(" \t\r\n");
+            if (start == std::string_view::npos) return {};
+            return std::string{text.substr(start, text.find_last_not_of(" \t\r\n") - start + 1)};
+        }
+
+        // text for an HTML attribute's value in double quotes.
+        std::string attribute_text(const std::string_view text) {
+            std::string out;
+            for (const char c: text) {
+                if (c == '&') out += "&amp;";
+                else if (c == '"') out += "&quot;";
+                else if (c == '<') out += "&lt;";
+                else out += c;
+            }
+            return out;
+        }
     }
 
     struct html2pdf::impl {
@@ -220,20 +249,25 @@ namespace sc {
             cuts = paginate(recorded, recorded_sizes, total, breaks, whole, [&](const std::size_t i) { return page_of_content(i); });
         }
 
-        // A marker's text for #tag# on a page: the first on the latest page up to it that has one.
+        // What #tag# shows on a page, from the first marker on the latest page up to it that has
+        // one: its image when its text is an image's path (whatever its alt), else its text.
         [[nodiscard]] std::string variable(const std::string &tag, const unsigned page) const {
-            std::string value;
+            const marker *found = nullptr;
             unsigned found_on = 0;
             for (const auto &each: markers) {
                 if (each.tag != tag) continue;
                 const unsigned on = page_of_content(cut_at(cuts, each.top));
                 if (on > page) break;
                 if (on != found_on) {
-                    value = each.text;
+                    found = &each;
                     found_on = on;
                 }
             }
-            return value;
+            if (!found) return {};
+            // As wide as the place it's in at most; the caller's CSS may size it further (img.section-image).
+            if (!found->image.empty())
+                return "<img class=\"section-image\" src=\"" + attribute_text(found->image) + "\" style=\"max-width: 100%\" />";
+            return found->text;
         }
 
         [[nodiscard]] std::string filled(std::string html, const unsigned page) const {
@@ -242,9 +276,7 @@ namespace sc {
             for (const std::string tag: {"section", "subsection", "subtitle"}) {
                 const std::string name = "#" + tag + "#";
                 if (html.find(name) == std::string::npos) continue;
-                auto value = variable(tag, page);
-                if (value.ends_with(".png") || value.ends_with(".jpg")) value = "<img src=\"" + value + "\" />";
-                replace_all(html, name, value);
+                replace_all(html, name, variable(tag, page));
             }
             return html;
         }
@@ -310,9 +342,10 @@ namespace sc {
             recorded_sizes = measured_of(recorded);
             checked();
             for (const auto &element: content->select("section, subsection, subtitle")) {
+                const auto own = trimmed(element.text());
                 auto text = element.attribute("alt").value_or("");
-                if (text.empty()) text = element.text();
-                markers.push_back({element.name(), text, element.box().top()});
+                if (text.empty()) text = own;
+                markers.push_back({element.name(), text, image_path(own) ? own : std::string{}, element.box().top()});
             }
 
             // The table of contents' length moves the pages after it, which its entries number:

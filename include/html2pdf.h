@@ -24,8 +24,10 @@ namespace sc {
     ///     pdf.save("invoice.pdf");
     ///
     /// In the header and footer, #Page# is the page's number and #ToPage# the last page's; #section#,
-    /// #subsection# and #subtitle# the text of the last such element on or before the page (an
-    /// image's file name becomes the image). A header's #P1Head shows on the first page only and
+    /// #subsection# and #subtitle# the text of the last such element on or before the page. An
+    /// element whose text is an image's path or URL (logo.png, .jpg, .jpeg, .gif, .svg) shows that
+    /// image there, at most as wide as where it is (class section-image, for CSS to size it), while
+    /// its alt names it in the table of contents. A header's #P1Head shows on the first page only and
     /// #POHead on the others.
     ///
     /// In the content, <section> starts a new page and an entry in the table of contents (its alt,
