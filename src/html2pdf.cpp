@@ -98,6 +98,11 @@ namespace sc {
 
     struct html2pdf::impl {
         options settings;
+        std::function<void()> check; // called now and then; throws to stop
+
+        void checked() const {
+            if (check) check();
+        }
         double page_width = 0, page_height = 0; // points
         double width = 0;                        // the content's, px
         double header_first = 0, header_other = 0, footer = 0; // heights, px
@@ -277,7 +282,8 @@ namespace sc {
                                 [&](const std::size_t i) { return page_of_toc(i); });
         }
 
-        impl(const std::string_view html, options given) : settings(std::move(given)) {
+        impl(const std::string_view html, options given, std::function<void()> checking) : settings(std::move(given)), check(std::move(checking)) {
+            checked();
             settings.html.builtin_fonts = settings.builtin_fonts;
             if (!settings.html.images) settings.html.images.emplace(); // the header and footer, laid out for every page, read their images once
             const auto page = page_dimensions(settings.size, settings.turned);
@@ -295,10 +301,14 @@ namespace sc {
 
             auto options = settings.html;
             options.css = settings.css + marker_css;
+            checked();
             content.emplace(prepared(std::string{html}), options);
+            checked();
             content->layout(width);
+            checked();
             recorded = content->drawing();
             recorded_sizes = measured_of(recorded);
+            checked();
             for (const auto &element: content->select("section, subsection, subtitle")) {
                 auto text = element.attribute("alt").value_or("");
                 if (text.empty()) text = element.text();
@@ -312,6 +322,7 @@ namespace sc {
             if (toc_start) {
                 toc_start = std::min<unsigned>(toc_start, static_cast<unsigned>(cuts.size()) + 1);
                 for (int round = 0; round < 5; ++round) {
+                    checked();
                     const auto before = toc_count();
                     paginate_toc();
                     paginate_content();
@@ -325,6 +336,7 @@ namespace sc {
         void draw_pages(pdf &file, const drawing &picture, const std::vector<measured> &sizes, const std::vector<cut> &pages,
                         PageOf page_of) const {
             for (std::size_t i = 0; i < pages.size(); ++i) {
+                checked();
                 const unsigned page = page_of(i);
                 file.set_page(page);
                 draw_part(file, picture, sizes, pages[i], content_area(page));
@@ -429,6 +441,7 @@ namespace sc {
         }
 
         void save(const std::filesystem::path &path) const {
+            checked();
             std::optional<pdf> file;
             if (settings.protection) file.emplace(path, settings.size, settings.turned, *settings.protection);
             else file.emplace(path, settings.size, settings.turned);
@@ -442,6 +455,7 @@ namespace sc {
             if (toc) add_links(*file, *toc, [&](const double x, const double y) { return toc_place(x, y); }, *content);
 
             for (unsigned page = 1; page <= page_count(); ++page) {
+                checked();
                 file->set_page(page);
                 const double left = points(settings.margins.left);
                 const auto fixed_at = [&](const double top) {
@@ -463,6 +477,7 @@ namespace sc {
                 if (settings.draw_margins) draw_margins(*file, page);
             }
 
+            checked();
             if (settings.outline) add_outline(*file);
             auto metadata = settings.metadata;
             if (!metadata.contains("Title") && !content->title().empty()) metadata["Title"] = content->title();
@@ -475,7 +490,11 @@ namespace sc {
     html2pdf::html2pdf(const std::string_view html) : html2pdf(html, options{}) {
     }
 
-    html2pdf::html2pdf(const std::string_view html, options settings) : impl_(std::make_unique<impl>(html, std::move(settings))) {
+    html2pdf::html2pdf(const std::string_view html, options settings) : html2pdf(html, std::move(settings), {}) {
+    }
+
+    html2pdf::html2pdf(const std::string_view html, options settings, std::function<void()> check)
+        : impl_(std::make_unique<impl>(html, std::move(settings), std::move(check))) {
     }
 
     html2pdf::html2pdf(html2pdf &&) noexcept = default;
@@ -486,7 +505,16 @@ namespace sc {
 
     const std::vector<html2pdf::cut> &html2pdf::cuts() const { return impl_->cuts; }
 
-    void html2pdf::save(const std::filesystem::path &file) const { impl_->save(file); }
+    void html2pdf::save(const std::filesystem::path &file) const {
+        try {
+            impl_->save(file);
+        } catch (...) {
+            // Stopped part way (a check that threw, a write that failed): no half-written file.
+            std::error_code ignored;
+            std::filesystem::remove(file, ignored);
+            throw;
+        }
+    }
 
     std::string html2pdf::bytes() const {
         // sc::pdf only writes files.

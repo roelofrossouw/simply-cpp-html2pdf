@@ -182,6 +182,30 @@ int main() {
         CHECK(contains(read(path), "/Encrypt"));
     }
 
+    SECTION("A check called while laying out and writing; one that throws stops it, leaving no file");
+    {
+        int calls = 0;
+        const sc::html2pdf pdf{paragraphs(200), {}, [&] { ++calls; }};
+        const int laid_out = calls;
+        CHECK(laid_out >= 5);
+        const auto path = directory / "checked.pdf";
+        pdf.save(path);
+        CHECK(calls >= laid_out + static_cast<int>(pdf.page_count())); // at least once a page
+        CHECK(std::filesystem::exists(path));
+
+        // Stopped while laying out: the exception comes out as it is.
+        int left = 3;
+        CHECK_THROWS_AS(sc::html2pdf(paragraphs(200), {}, [&] { if (--left == 0) throw std::range_error{"stop"}; }), std::range_error);
+
+        // Stopped while writing: no half-written file.
+        bool stopping = false;
+        const sc::html2pdf stopped{paragraphs(200), {}, [&] { if (stopping) throw std::range_error{"stop"}; }};
+        stopping = true;
+        CHECK_THROWS_AS(stopped.save(path), std::range_error);
+        CHECK(!std::filesystem::exists(path));
+        CHECK_THROWS_AS((void) stopped.bytes(), std::range_error);
+    }
+
     SECTION("Mistakes");
     {
         sc::html2pdf::options settings;

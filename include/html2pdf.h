@@ -5,6 +5,7 @@
 #include <pdf.h>
 
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -99,6 +100,13 @@ namespace sc {
         explicit html2pdf(std::string_view html);
 
         html2pdf(std::string_view html, options settings);
+
+        /// The same, calling check now and then while it lays out the document here and writes it
+        /// in save() and bytes(): between its stages and for every page. To stop, check throws (a
+        /// time limit passed, the reader went away); the exception comes out of the constructor,
+        /// save() or bytes() as it is, and save() leaves no file. Laying out the content is one
+        /// step: a check comes before and after it, not during it.
+        html2pdf(std::string_view html, options settings, std::function<void()> check);
 
         html2pdf(html2pdf &&) noexcept;
         html2pdf &operator=(html2pdf &&) noexcept;
