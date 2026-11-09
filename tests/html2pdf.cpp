@@ -2,6 +2,7 @@
 // file holds (pages, links, bookmarks, information).
 #include <html2pdf.h>
 #include <pdflite/document.h>
+#include <pdflite/reader.h>
 
 #include "sc_test.h"
 
@@ -19,6 +20,26 @@ namespace {
     }
 
     bool contains(const std::string &text, const std::string &part) { return text.find(part) != std::string::npos; }
+
+    // A page's content, its streams decoded one after another.
+    std::string page_content(const sc::pdflite::reader &pdf, const std::size_t index) {
+        using namespace sc::pdflite;
+        const auto page = pdf.page(index);
+        const auto *contents = page.find("Contents");
+        if (!contents) return {};
+        std::vector<object> parts;
+        const bool one = contents->is<reference>() && pdf.is_stream(contents->as<reference>().id);
+        if (const object resolved = one ? *contents : pdf.resolve(*contents); resolved.is<array>()) {
+            for (const auto &part: resolved.as<array>()) parts.push_back(part);
+        } else {
+            parts.push_back(resolved);
+        }
+        std::string out;
+        for (const auto &part: parts)
+            if (part.is<reference>())
+                if (const auto data = pdf.stream(part.as<reference>().id)) out += pdf.decoded(*data);
+        return out;
+    }
 
     std::size_t count(const std::string &text, const std::string &part) {
         std::size_t found = 0;
@@ -125,6 +146,33 @@ int main() {
         CHECK(contains(file, "/Producer (simply-cpp-html2pdf "));
         CHECK(contains(file, "simply-cpp-pdflite " + std::string{sc::pdflite::version()})); // in brackets after it
         CHECK(contains(file, "/Dest")); // #end
+    }
+
+    SECTION("Headers and footers laid out once for the pages that show the same: each page's own number");
+    {
+        // Laid out once for each section and length of page number, the number put in afterwards.
+        // Digits in the text (2026, the section names) mustn't be taken for it.
+        sc::html2pdf::options settings;
+        settings.builtin_fonts = true; // text written as it is, to be found in the pages
+        settings.header = "<table style='width: 100%'><tr><td>Version 2026-11 #section#</td><td style='text-align: right'>Page #Page#/#ToPage#</td></tr></table>";
+        settings.footer = "<p style='text-align: center'>#Page# - 10 - 0 - #section#</p>";
+        std::string html;
+        for (int part = 1; part <= 3; ++part) html += "<section>Part " + std::to_string(part) + "</section>" + paragraphs(120);
+        const sc::html2pdf pdf{html, settings};
+        CHECK_LT(12u, pdf.page_count()); // one and two digits
+        const auto path = directory / "numbered.pdf";
+        pdf.save(path);
+        const sc::pdflite::reader read_back{path};
+        bool all = true;
+        for (unsigned page = 1; page <= pdf.page_count(); ++page) {
+            const auto text = page_content(read_back, page - 1);
+            const auto number = std::to_string(page);
+            const bool right = contains(text, "(" + number + "/" + std::to_string(pdf.page_count()) + ") Tj") && contains(text, "(" + number + ") Tj") &&
+                               contains(text, "(2026-11) Tj");
+            if (!right) CHECK_MSG(right, "page " + number + "'s header and footer");
+            all = all && right;
+        }
+        CHECK(all);
     }
 
     SECTION("Images: a footer's logo written once for every page; a big PNG scaled down to 150 pixels an inch");

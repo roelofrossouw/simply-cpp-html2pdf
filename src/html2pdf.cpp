@@ -10,6 +10,8 @@
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <map>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <variant>
@@ -270,8 +272,11 @@ namespace sc {
             return found->text;
         }
 
-        [[nodiscard]] std::string filled(std::string html, const unsigned page) const {
-            replace_all(html, "#Page#", std::to_string(page));
+        [[nodiscard]] std::string filled(std::string html, const unsigned page) const { return filled(std::move(html), page, std::to_string(page)); }
+
+        // The same, #Page# as number (a placeholder, for a layout used again: laid_out_part()).
+        [[nodiscard]] std::string filled(std::string html, const unsigned page, const std::string &number) const {
+            replace_all(html, "#Page#", number);
             replace_all(html, "#ToPage#", std::to_string(page_count()));
             for (const std::string tag: {"section", "subsection", "subtitle"}) {
                 const std::string name = "#" + tag + "#";
@@ -282,11 +287,116 @@ namespace sc {
         }
 
         [[nodiscard]] web::html header_or_footer(const std::string &html, const unsigned page) const {
+            return laid_out(filled(html, page), page);
+        }
+
+        // HTML filled in for a page, as a header or footer laid out.
+        [[nodiscard]] web::html laid_out(const std::string &text, const unsigned page) const {
             auto options = settings.html;
             options.css = settings.css + (page == 1 ? first_page_css : other_page_css);
-            web::html document{prepared(filled(html, page)), options};
+            web::html document{prepared(text), options};
             document.layout(width);
             return document;
+        }
+
+        // A header or footer laid out once and drawn on every page that shows the same: the same
+        // #section#, #subsection# and #subtitle#, a page number of the same length, and the first
+        // page's or the others' CSS. Laying it out again for every page was most of save()'s time
+        // (a 34 kB stylesheet parsed twice a page). The page number is laid out as a placeholder of
+        // as many digits and put in the drawing afterwards: the same width when the font's digits all
+        // are (most fonts', and the built-in fonts'). Where that can't be relied on, it isn't reused.
+        struct part {
+            std::optional<web::html> document;
+            drawing picture;
+            std::string placeholder; // what stands for the page number in its words; empty: none
+            bool reusable = false;
+        };
+
+        // The digit text doesn't show (outside tags and entities), to stand for the page number;
+        // '0' when every digit shows (and the count in reusable_part() then decides).
+        static char unused_digit(const std::string_view html) {
+            bool used[10] = {};
+            bool in_tag = false, in_entity = false;
+            for (const char c: html) {
+                if (in_tag) {
+                    in_tag = c != '>';
+                } else if (in_entity) {
+                    in_entity = c != ';' && !std::isspace(static_cast<unsigned char>(c));
+                } else if (c == '<') {
+                    in_tag = true;
+                } else if (c == '&') {
+                    in_entity = true;
+                } else if (c >= '0' && c <= '9') {
+                    used[c - '0'] = true;
+                }
+            }
+            for (int d = 0; d < 10; ++d)
+                if (!used[d]) return static_cast<char>('0' + d);
+            return '0';
+        }
+
+        static std::size_t occurrences(const std::string_view text, const std::string_view of) {
+            std::size_t count = 0;
+            for (auto at = text.find(of); at != std::string_view::npos; at = text.find(of, at + of.size())) ++count;
+            return count;
+        }
+
+        // Whether a font's digits are all as wide (so any number of a length lays out the same).
+        bool tabular(const sc::font &font) const {
+            if (settings.builtin_fonts) return true; // the built-in fonts' digits are (Adobe's metrics)
+            const double zero = font.width("0");
+            for (const char *digit: {"1", "2", "3", "4", "5", "6", "7", "8", "9"})
+                if (std::abs(font.width(digit) - zero) > 1e-6) return false;
+            return true;
+        }
+
+        // The header or footer html for a page: its drawing (in px, from its top left), and the
+        // document (for its links), from parts when laid out before.
+        std::pair<drawing, const web::html *> part_for(std::map<std::string, part> &parts, const std::string &html, const unsigned page,
+                                                       std::optional<web::html> &alone) const {
+            const std::string number = std::to_string(page);
+            const auto pages_in = occurrences(html, "#Page#");
+            // #Page# marked first (a control character no HTML has), then made the placeholder.
+            const std::string mark(number.size(), '\x01');
+            std::string with_placeholder = filled(html, page, mark);
+            const char digit = unused_digit(with_placeholder);
+            const std::string placeholder(number.size(), digit);
+            replace_all(with_placeholder, mark, placeholder);
+            const std::string key = std::string{page == 1 ? "1:" : "n:"} + with_placeholder;
+            auto [found, made] = parts.try_emplace(key);
+            part &each = found->second;
+            if (made) {
+                each.document.emplace(laid_out(with_placeholder, page));
+                each.picture = each.document->drawing();
+                each.placeholder = pages_in ? placeholder : std::string{};
+                // Reused only when the placeholder is found as often as #Page# is in the html, and
+                // only in words of fonts whose digits are all as wide.
+                std::size_t seen = 0;
+                bool fits = true;
+                for (const auto &item: each.picture.items()) {
+                    if (const auto *words = std::get_if<label>(&item); words && pages_in) {
+                        const auto here = occurrences(words->text.content, placeholder);
+                        seen += here;
+                        if (here && !tabular(words->text.font)) fits = false;
+                    }
+                }
+                each.reusable = fits && seen == pages_in;
+            }
+            if (!each.reusable) {
+                alone.emplace(laid_out(filled(html, page), page));
+                return {alone->drawing(), &*alone};
+            }
+            drawing out = each.picture;
+            if (!each.placeholder.empty()) {
+                drawing numbered;
+                for (auto item: out.items()) {
+                    if (auto *words = std::get_if<label>(&item)) replace_all(words->text.content, each.placeholder, number);
+                    numbered.add(std::move(item));
+                }
+                numbered.page(out.page());
+                out = std::move(numbered);
+            }
+            return {std::move(out), &*each.document};
         }
 
         [[nodiscard]] std::string toc_html() const {
@@ -487,6 +597,7 @@ namespace sc {
             add_links(*file, *content, [&](const double x, const double y) { return content_place(x, y); }, *content);
             if (toc) add_links(*file, *toc, [&](const double x, const double y) { return toc_place(x, y); }, *content);
 
+            std::map<std::string, part> headers, footers; // laid out once for every page that shows the same
             for (unsigned page = 1; page <= page_count(); ++page) {
                 checked();
                 file->set_page(page);
@@ -497,15 +608,19 @@ namespace sc {
                     };
                 };
                 if (!settings.header.empty()) {
-                    auto header = header_or_footer(settings.header, page);
-                    header.draw(*file, transform::scale(points_per_px).then(transform::translate(left, margin_top(page))));
-                    add_links(*file, header, fixed_at(margin_top(page)), *content);
+                    std::optional<web::html> alone;
+                    auto [picture, header] = part_for(headers, settings.header, page, alone);
+                    picture.apply(transform::scale(points_per_px).then(transform::translate(left, margin_top(page))));
+                    file->draw(picture);
+                    add_links(*file, *header, fixed_at(margin_top(page)), *content);
                 }
                 if (!settings.footer.empty()) {
-                    auto bottom = header_or_footer(settings.footer, page);
+                    std::optional<web::html> alone;
+                    auto [picture, bottom] = part_for(footers, settings.footer, page, alone);
                     const double top = page_height - points(settings.margins.bottom) - footer * points_per_px;
-                    bottom.draw(*file, transform::scale(points_per_px).then(transform::translate(left, top)));
-                    add_links(*file, bottom, fixed_at(top), *content);
+                    picture.apply(transform::scale(points_per_px).then(transform::translate(left, top)));
+                    file->draw(picture);
+                    add_links(*file, *bottom, fixed_at(top), *content);
                 }
                 if (settings.draw_margins) draw_margins(*file, page);
             }
