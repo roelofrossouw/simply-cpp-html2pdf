@@ -273,6 +273,41 @@ int main() {
         CHECK_THROWS_AS((void) stopped.bytes(), std::range_error);
     }
 
+    SECTION("A border on one side of a cell is one band, with nothing drawn for the other sides");
+    {
+        // Was a ring whose inner edge lay on the outer one at the top, bottom and left: bands of no
+        // width that Adobe Reader painted as hairlines, a box round every cell.
+        sc::html2pdf::options settings;
+        settings.builtin_fonts = true;
+        const sc::html2pdf pdf{"<table style='border-collapse: collapse'><tr>"
+                               "<td style='border-right: 1px solid #ff0000'>Caption</td><td>Value</td>"
+                               "<td style='border: 2px solid #0000ff'>Boxed</td></tr></table>",
+                               settings};
+        const auto path = directory / "one-side.pdf";
+        pdf.save(path);
+        const auto text = page_content(sc::pdflite::reader{path}, 0);
+        // Each fill in a colour: its path's subpaths (one m apiece) and points.
+        const auto fills = [&](const std::string &colour) {
+            std::vector<std::pair<std::size_t, std::size_t>> out; // subpaths, points
+            for (auto at = text.find(colour); at != std::string::npos; at = text.find(colour, at + 1)) {
+                const auto end = text.find("\nf", at);
+                if (end == std::string::npos) break;
+                const auto shape = text.substr(at, end - at);
+                out.emplace_back(count(shape, " m"), count(shape, " m") + count(shape, " l"));
+            }
+            return out;
+        };
+        const auto red = fills("1 0 0 rg");
+        CHECK_EQ(std::size_t{1}, red.size());
+        if (!red.empty()) {
+            CHECK_EQ(std::size_t{1}, red[0].first);  // one subpath: the right-hand band
+            CHECK_EQ(std::size_t{4}, red[0].second); // a rectangle, no edges of no width beside it
+        }
+        const auto blue = fills("0 0 1 rg");
+        CHECK_EQ(std::size_t{1}, blue.size());
+        if (!blue.empty()) CHECK_EQ(std::size_t{2}, blue[0].first); // the box: still one ring, as before
+    }
+
     SECTION("Mistakes");
     {
         sc::html2pdf::options settings;
