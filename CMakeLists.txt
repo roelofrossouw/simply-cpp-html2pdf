@@ -8,12 +8,12 @@ option(SC_HTML2PDF_BUILD_TESTS "Build simply-cpp-html2pdf tests" ${PROJECT_IS_TO
 get_sc_version()
 message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
-find_or_install_package(sc-core simply-cpp-dev simply-cpp 2.1.2) # 2.1.2: colours such as #900 no longer come out a hair below 0
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 2.1.3) # 2.1.2: colours such as #900 no longer come out a hair below 0; 2.1.3: every CSS form of rgb()/hsl()
 # The HTML engine (litehtml) and the PDF writer (sc-pdf, on sc-pdflite).
 find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 1.5.5) # 1.5.4: an image in a table cell sized as shown (max-height); 1.5.5: one-sided borders without hairlines
 find_or_install_package(sc-pdf simply-cpp-pdf-dev simply-cpp-pdf 4.1.2) # 4.1.2: an empty clip (a <section> with a link)
 # sc::pdflite::version(), for the Producer, since 4.6.0.
-find_or_install_package(sc-pdflite simply-cpp-pdflite-dev simply-cpp-pdflite 4.6.0)
+find_or_install_package(sc-pdflite simply-cpp-pdflite-dev simply-cpp-pdflite 4.6.3) # 4.6.3: colour channels clamped to 0 to 1
 
 set(SOURCE_OBJECTS)
 set(SOURCE_LIBRARIES)
