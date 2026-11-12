@@ -308,6 +308,21 @@ int main() {
         if (!blue.empty()) CHECK_EQ(std::size_t{2}, blue[0].first); // the box: still one ring, as before
     }
 
+    SECTION("Colours with a channel of 0x99 (#900, #990000)");
+    {
+        // #900's green and blue once came back from sc::color a hair below 0, and sc::pdflite
+        // refused the page ("a colour channel outside 0 to 1").
+        sc::html2pdf::options settings;
+        settings.builtin_fonts = true;
+        const sc::html2pdf pdf{"<p style='color: #900'>Warning</p><p style='background: #990000; color: #f90'>Also</p>",
+                               settings};
+        const auto path = directory / "colour-0x99.pdf";
+        pdf.save(path);
+        const auto text = page_content(sc::pdflite::reader{path}, 0);
+        CHECK(contains(text, "0.6 0 0 rg"));
+        CHECK(contains(text, "1 0.6 0 rg"));
+    }
+
     SECTION("Mistakes");
     {
         sc::html2pdf::options settings;
