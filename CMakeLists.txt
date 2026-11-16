@@ -13,7 +13,7 @@ find_or_install_package(sc-core simply-cpp-dev simply-cpp 2.1.3) # 2.1.2: colour
 find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 1.5.5) # 1.5.4: an image in a table cell sized as shown (max-height); 1.5.5: one-sided borders without hairlines
 find_or_install_package(sc-pdf simply-cpp-pdf-dev simply-cpp-pdf 4.1.2) # 4.1.2: an empty clip (a <section> with a link)
 # sc::pdflite::version(), for the Producer, since 4.6.0.
-find_or_install_package(sc-pdflite simply-cpp-pdflite-dev simply-cpp-pdflite 4.6.3) # 4.6.3: colour channels clamped to 0 to 1
+find_or_install_package(sc-pdflite simply-cpp-pdflite-dev simply-cpp-pdflite 4.7.1) # 4.6.3: colour channels clamped to 0 to 1; 4.7.1: revisions 2 to 6 read, "can't read" told apart from a wrong password
 
 set(SOURCE_OBJECTS)
 set(SOURCE_LIBRARIES)
@@ -27,6 +27,15 @@ add_sc_object(html2pdf
 target_compile_definitions(sc-obj-html2pdf PRIVATE SC_HTML2PDF_VERSION="${SC_VERSION}")
 
 add_sc_libraries(DESCRIPTION "simply-cpp-html2pdf")
+
+# The shared library carries its own copies of sc-pdf, sc-pdflite, sc-litehtml, sc-graphics, sc-qrencode
+# and sc-core (from their static archives). Exported, they took over the same names in every process
+# that loads it beside those modules' own shared libraries: PHP's sc.so ran sc-pdflite 4.6.3's
+# encryption code from here instead of libsc-pdflite 4.7.0's, and revision 5 files wouldn't open.
+# Only html2pdf's own code is exported now (ELF; macOS's two-level namespace doesn't interpose).
+if (NOT APPLE)
+    target_link_options(sc-html2pdf-shared PRIVATE "LINKER:--exclude-libs,ALL")
+endif ()
 
 install_sc_module(PATH_VARS CMAKE_INSTALL_INCLUDEDIR)
 install(FILES cmake/SimplyCppFunctions.cmake cmake/sc_bootstrap.cmake
@@ -42,4 +51,4 @@ add_sc_example(sc-html2pdf-demo)
 
 # Named, not left to dpkg-shlibdeps: sc-graphics wants an emoji font.
 package_sc_module(DEPENDS fonts-noto-color-emoji "simply-cpp-http (>= 1.1.0~)" "simply-cpp-pdflite (>= 4.6.0~)"
-        DEV_DEPENDS "simply-cpp-dev (>= 1.20.0~)" "simply-cpp-litehtml-dev (>= 1.5.5~)" "simply-cpp-pdf-dev (>= 4.1.2~)" "simply-cpp-pdflite-dev (>= 4.6.0~)")
+        DEV_DEPENDS "simply-cpp-dev (>= 1.20.0~)" "simply-cpp-litehtml-dev (>= 1.5.5~)" "simply-cpp-pdf-dev (>= 4.1.2~)" "simply-cpp-pdflite-dev (>= 4.7.1~)")
