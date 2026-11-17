@@ -1,8 +1,8 @@
 #pragma once
 
-#include <html.h>
-#include <page.h>
-#include <pdf.h>
+#include <sc/litehtml/html.h>
+#include <sc/graphics/page.h>
+#include <sc/pdf/pdf.h>
 
 #include <filesystem>
 #include <functional>

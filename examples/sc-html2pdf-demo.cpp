@@ -5,10 +5,10 @@
 #include <iostream>
 #include <string>
 
-#include <params.h>
-#include <sc.h>
+#include <sc/core/params.h>
+#include <sc/core/sc.h>
 
-#include <html2pdf.h>
+#include <sc/html2pdf/html2pdf.h>
 
 int main(int argc, char **argv) {
     const sc::params args{argc, argv, {

@@ -1,7 +1,7 @@
-#include "html2pdf.h"
+#include <sc/html2pdf/html2pdf.h>
 
-#include <pdflite/document.h>
-#include <style.h>
+#include <sc/pdflite/document.h>
+#include <sc/web/style.h>
 
 #include <algorithm>
 #include <cctype>

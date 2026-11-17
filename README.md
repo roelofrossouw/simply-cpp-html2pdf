@@ -17,7 +17,7 @@ target_link_libraries(myapp PRIVATE sc::sc-html2pdf-shared)
 ```
 
 ```cpp
-#include <html2pdf.h>
+#include <sc/html2pdf/html2pdf.h>
 
 sc::html2pdf::options settings;
 settings.header = "<p style='text-align: right'>#section# - page #Page# of #ToPage#</p>";

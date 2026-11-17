@@ -1,8 +1,8 @@
 // sc::html2pdf: pages cut between lines, hard breaks, the table of contents' pages, and what the
 // file holds (pages, links, bookmarks, information).
-#include <html2pdf.h>
-#include <pdflite/document.h>
-#include <pdflite/reader.h>
+#include <sc/html2pdf/html2pdf.h>
+#include <sc/pdflite/document.h>
+#include <sc/pdflite/reader.h>
 
 #include "sc_test.h"
 
