@@ -2,10 +2,10 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/SimplyCppFunctions.cmake")
 
-find_or_install_package(sc-core simply-cpp-dev simply-cpp 2.2.0)
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 3.0.0)
 # html2pdf.h's sc::web::html and sc::pdflite::protection.
-find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 1.6.0)
-find_or_install_package(sc-pdflite simply-cpp-pdflite-dev simply-cpp-pdflite 4.8.0)
-find_or_install_package(sc-web simply-cpp-web-dev simply-cpp-web 1.6.0)
+find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 2.0.0)
+find_or_install_package(sc-pdflite simply-cpp-pdflite-dev simply-cpp-pdflite 5.0.0)
+find_or_install_package(sc-web simply-cpp-web-dev simply-cpp-web 2.0.0)
 
 include("${CMAKE_CURRENT_LIST_DIR}/sc-html2pdfTargets.cmake")
