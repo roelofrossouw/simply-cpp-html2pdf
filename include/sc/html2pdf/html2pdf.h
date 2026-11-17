@@ -57,11 +57,11 @@ namespace sc {
             std::string footer;
             /// CSS for the content, header and footer, after the defaults and before their own.
             std::string css;
-            /// The content's base URL, its fonts, @media type and fetching (sc::web::html_options;
+            /// The content's base URL, its fonts, @media type and fetching (sc::litehtml::html_options;
             /// its css is replaced by the one above). The content, header, footer and table of
             /// contents share its image cache, given one or not: each image is read once, and
             /// written into the file once.
-            web::html_options html;
+            litehtml::html_options html;
             /// The page the table of contents starts on (pushing what was there after it); 0 for
             /// none. Its title, and the outline (bookmarks) made of its entries, or else of the
             /// h1 to h3 headings.

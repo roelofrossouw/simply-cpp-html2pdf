@@ -10,7 +10,7 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
 find_or_install_package(sc-core simply-cpp-dev simply-cpp 3.0.0) # 2.1.2: colours such as #900 no longer come out a hair below 0; 2.1.3: every CSS form of rgb()/hsl()
 # The HTML engine (litehtml) and the PDF writer (sc-pdflite's writer, which was sc-pdf's sc::pdf).
-find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 2.0.0) # 1.5.4: an image in a table cell sized as shown (max-height); 1.5.5: one-sided borders without hairlines
+find_or_install_package(sc-litehtml simply-cpp-litehtml-dev simply-cpp-litehtml 3.0.0) # 1.5.4: an image in a table cell sized as shown (max-height); 1.5.5: one-sided borders without hairlines
 # sc::pdflite::writer (the canvas, sc-pdf's sc::pdf until it moved into sc-pdflite; raise this floor to the
 # sc-pdflite release that has writer.h) and sc::pdflite::version(), for the Producer, since 4.6.0.
 find_or_install_package(sc-pdflite simply-cpp-pdflite-dev simply-cpp-pdflite 5.0.0) # 4.6.3: colour channels clamped to 0 to 1; 4.7.1: revisions 2 to 6 read, "can't read" told apart from a wrong password
@@ -54,4 +54,4 @@ add_sc_example(sc-html2pdf-demo)
 # Named, not left to dpkg-shlibdeps: sc-graphics wants an emoji font. The simply-cpp modules it links
 # are added by package_sc_module(), at the versions it was built against.
 package_sc_module(DEPENDS fonts-noto-color-emoji
-        DEV_DEPENDS "simply-cpp-dev (>= 3.0.0~)" "simply-cpp-litehtml-dev (>= 2.0.0~)" "simply-cpp-pdflite-dev (>= 5.0.0~)")
+        DEV_DEPENDS "simply-cpp-dev (>= 3.0.0~)" "simply-cpp-litehtml-dev (>= 3.0.0~)" "simply-cpp-pdflite-dev (>= 5.0.0~)")

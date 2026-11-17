@@ -139,14 +139,14 @@ namespace sc {
         double width = 0;                        // the content's, px
         double header_first = 0, header_other = 0, footer = 0; // heights, px
 
-        std::optional<web::html> content;
+        std::optional<litehtml::html> content;
         drawing recorded;
         std::vector<measured> recorded_sizes;
         std::vector<cut> cuts;
         std::vector<marker> markers;
 
         // The table of contents, when there's one.
-        std::optional<web::html> toc;
+        std::optional<litehtml::html> toc;
         drawing toc_recorded;
         std::vector<measured> toc_sizes;
         std::vector<cut> toc_cuts;
@@ -225,7 +225,7 @@ namespace sc {
         }
 
         // The tops of what starts a page, and the boxes kept whole, in a document.
-        static std::pair<std::vector<double>, std::vector<kept> > breaks_of(const web::html &document) {
+        static std::pair<std::vector<double>, std::vector<kept> > breaks_of(const litehtml::html &document) {
             std::vector<double> breaks;
             std::vector<kept> whole;
             for (const auto &element: document.select("section, [style]")) {
@@ -242,7 +242,7 @@ namespace sc {
             return {breaks, whole};
         }
 
-        static double total_of(const web::html &document, const drawing &picture) {
+        static double total_of(const litehtml::html &document, const drawing &picture) {
             return std::max(document.height(), picture.empty() ? 0.0 : picture.bounds().bottom());
         }
 
@@ -287,15 +287,15 @@ namespace sc {
             return html;
         }
 
-        [[nodiscard]] web::html header_or_footer(const std::string &html, const unsigned page) const {
+        [[nodiscard]] litehtml::html header_or_footer(const std::string &html, const unsigned page) const {
             return laid_out(filled(html, page), page);
         }
 
         // HTML filled in for a page, as a header or footer laid out.
-        [[nodiscard]] web::html laid_out(const std::string &text, const unsigned page) const {
+        [[nodiscard]] litehtml::html laid_out(const std::string &text, const unsigned page) const {
             auto options = settings.html;
             options.css = settings.css + (page == 1 ? first_page_css : other_page_css);
-            web::html document{prepared(text), options};
+            litehtml::html document{prepared(text), options};
             document.layout(width);
             return document;
         }
@@ -307,7 +307,7 @@ namespace sc {
         // as many digits and put in the drawing afterwards: the same width when the font's digits all
         // are (most fonts', and the built-in fonts'). Where that can't be relied on, it isn't reused.
         struct part {
-            std::optional<web::html> document;
+            std::optional<litehtml::html> document;
             drawing picture;
             std::string placeholder; // what stands for the page number in its words; empty: none
             bool reusable = false;
@@ -353,8 +353,8 @@ namespace sc {
 
         // The header or footer html for a page: its drawing (in px, from its top left), and the
         // document (for its links), from parts when laid out before.
-        std::pair<drawing, const web::html *> part_for(std::map<std::string, part> &parts, const std::string &html, const unsigned page,
-                                                       std::optional<web::html> &alone) const {
+        std::pair<drawing, const litehtml::html *> part_for(std::map<std::string, part> &parts, const std::string &html, const unsigned page,
+                                                       std::optional<litehtml::html> &alone) const {
             const std::string number = std::to_string(page);
             const auto pages_in = occurrences(html, "#Page#");
             // #Page# marked first (a control character no HTML has), then made the placeholder.
@@ -530,8 +530,8 @@ namespace sc {
         }
 
         // The links in a document, where(x, y) placing a point of it (px) on its page.
-        void add_links(pdflite::writer &file, const web::html &document, const std::function<std::optional<placed>(double, double)> &where,
-                       const web::html &targets) const {
+        void add_links(pdflite::writer &file, const litehtml::html &document, const std::function<std::optional<placed>(double, double)> &where,
+                       const litehtml::html &targets) const {
             for (const auto &link: document.select("a[href]")) {
                 const auto href = link.attribute("href").value_or("");
                 const rect box = link.box();
@@ -554,7 +554,7 @@ namespace sc {
                     if (const auto to = content_place(found.front().box().left(), found.front().box().top()))
                         file.add_link(to->page, area, std::max(0.0, to->y - 4));
                 } else {
-                    file.add_link(web::html::resolve(href, settings.html.base_url), area);
+                    file.add_link(litehtml::html::resolve(href, settings.html.base_url), area);
                 }
             }
         }
@@ -609,14 +609,14 @@ namespace sc {
                     };
                 };
                 if (!settings.header.empty()) {
-                    std::optional<web::html> alone;
+                    std::optional<litehtml::html> alone;
                     auto [picture, header] = part_for(headers, settings.header, page, alone);
                     picture.apply(transform::scale(points_per_px).then(transform::translate(left, margin_top(page))));
                     file->draw(picture);
                     add_links(*file, *header, fixed_at(margin_top(page)), *content);
                 }
                 if (!settings.footer.empty()) {
-                    std::optional<web::html> alone;
+                    std::optional<litehtml::html> alone;
                     auto [picture, bottom] = part_for(footers, settings.footer, page, alone);
                     const double top = page_height - points(settings.margins.bottom) - footer * points_per_px;
                     picture.apply(transform::scale(points_per_px).then(transform::translate(left, top)));
