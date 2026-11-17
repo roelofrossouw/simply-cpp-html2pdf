@@ -2,7 +2,7 @@
 
 #include <sc/litehtml/html.h>
 #include <sc/graphics/page.h>
-#include <sc/pdf/pdf.h>
+#include <sc/pdflite/encryption.h>
 
 #include <filesystem>
 #include <functional>
@@ -73,7 +73,7 @@ namespace sc {
             /// (simply-cpp-pdflite 4.6.0)", their versions.
             std::map<std::string, std::string> metadata;
             /// Passwords and rights; none leaves the file unencrypted.
-            std::optional<pdf::protection> protection;
+            std::optional<pdflite::protection> protection;
             /// Text in PDF's built-in fonts (Helvetica, Times, Courier), which every reader has:
             /// nothing embedded, smaller files. CSS families map to them (Arial and sans-serif to
             /// Helvetica, Times New Roman and serif to Times, Courier New and monospace to Courier;
@@ -87,7 +87,7 @@ namespace sc {
             /// Outlines the margins, header and footer areas, to check a layout.
             bool draw_margins = false;
             /// PNG images are written at most about this many pixels per inch, at the biggest size
-            /// they're shown: bigger ones are scaled down (sc::pdf::image_resolution()). JPEGs are
+            /// they're shown: bigger ones are scaled down (sc::pdflite::writer::image_resolution()). JPEGs are
             /// written as they are. 0 keeps every image as it is.
             double image_resolution = 150;
         };

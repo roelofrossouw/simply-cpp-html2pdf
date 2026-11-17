@@ -243,7 +243,7 @@ int main() {
     SECTION("Passwords");
     {
         sc::html2pdf::options settings;
-        settings.protection = sc::pdf::protection{.user_password = "secret"};
+        settings.protection = sc::pdflite::protection{.user_password = "secret"};
         const auto path = directory / "locked.pdf";
         sc::html2pdf{"<p>hidden</p>", settings}.save(path);
         CHECK(contains(read(path), "/Encrypt"));

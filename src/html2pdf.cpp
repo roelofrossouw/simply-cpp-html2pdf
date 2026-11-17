@@ -1,6 +1,7 @@
 #include <sc/html2pdf/html2pdf.h>
 
 #include <sc/pdflite/document.h>
+#include <sc/pdflite/writer.h>
 #include <sc/web/style.h>
 
 #include <algorithm>
@@ -476,7 +477,7 @@ namespace sc {
         }
 
         template<typename PageOf>
-        void draw_pages(pdf &file, const drawing &picture, const std::vector<measured> &sizes, const std::vector<cut> &pages,
+        void draw_pages(pdflite::writer &file, const drawing &picture, const std::vector<measured> &sizes, const std::vector<cut> &pages,
                         PageOf page_of) const {
             for (std::size_t i = 0; i < pages.size(); ++i) {
                 checked();
@@ -487,7 +488,7 @@ namespace sc {
         }
 
         // The part of a recorded document a page shows, placed on it and clipped to its area.
-        static void draw_part(pdf &file, const drawing &picture, const std::vector<measured> &sizes, const cut &part, const rect &area) {
+        static void draw_part(pdflite::writer &file, const drawing &picture, const std::vector<measured> &sizes, const cut &part, const rect &area) {
             drawing shown;
             double below = 0; // how far a line's descender reaches past the page's cut
             const auto &items = picture.items();
@@ -529,7 +530,7 @@ namespace sc {
         }
 
         // The links in a document, where(x, y) placing a point of it (px) on its page.
-        void add_links(pdf &file, const web::html &document, const std::function<std::optional<placed>(double, double)> &where,
+        void add_links(pdflite::writer &file, const web::html &document, const std::function<std::optional<placed>(double, double)> &where,
                        const web::html &targets) const {
             for (const auto &link: document.select("a[href]")) {
                 const auto href = link.attribute("href").value_or("");
@@ -558,7 +559,7 @@ namespace sc {
             }
         }
 
-        void add_outline(pdf &file) const {
+        void add_outline(pdflite::writer &file) const {
             bool titled = false;
             for (const auto &each: markers) {
                 if (each.tag == "subsection") continue;
@@ -574,7 +575,7 @@ namespace sc {
             }
         }
 
-        void draw_margins(pdf &file, const unsigned page) const {
+        void draw_margins(pdflite::writer &file, const unsigned page) const {
             const sc::stroke red{sc::color{0.65, 0, 0}, 0.5}, green{sc::color{0.5, 0.65, 0}, 0.5};
             const double left = points(settings.margins.left), right = page_width - points(settings.margins.right);
             const double top = margin_top(page), bottom = page_height - points(settings.margins.bottom);
@@ -585,7 +586,7 @@ namespace sc {
 
         void save(const std::filesystem::path &path) const {
             checked();
-            std::optional<pdf> file;
+            std::optional<pdflite::writer> file;
             if (settings.protection) file.emplace(path, settings.size, settings.turned, *settings.protection);
             else file.emplace(path, settings.size, settings.turned);
             file->builtin_fonts(settings.builtin_fonts);
@@ -665,7 +666,7 @@ namespace sc {
     }
 
     std::string html2pdf::bytes() const {
-        // sc::pdf only writes files.
+        // sc::pdflite::writer only writes files.
         std::string name = (std::filesystem::temp_directory_path() / "sc-html2pdf-XXXXXX").string();
         const int descriptor = mkstemp(name.data());
         if (descriptor < 0) throw std::runtime_error("sc::html2pdf: can't make a temporary file in " + std::filesystem::temp_directory_path().string());

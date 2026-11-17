@@ -3,8 +3,8 @@
 HTML as pages of a PDF: the content flows from page to page under a header
 and over a footer, with page numbers, a table of contents, links and
 bookmarks. Laid out by [sc-litehtml](https://github.com/roelofrossouw/simply-cpp-litehtml)
-(litehtml) and written by [sc-pdf](https://github.com/roelofrossouw/simply-cpp-pdf)
-(on simply-cpp's own sc-pdflite), so it's **Apache-2.0** all the way down.
+(litehtml) and written by [sc-pdflite](https://github.com/roelofrossouw/simply-cpp-pdflite)'s `sc::pdflite::writer`,
+simply-cpp's own PDF writer, so it's **Apache-2.0** all the way down.
 
 **Documentation:** the [simply-cpp wiki](https://github.com/roelofrossouw/simply-cpp/wiki) has an [HTML to PDF guide](https://github.com/roelofrossouw/simply-cpp/wiki/HTML-to-PDF) and the [sc-html2pdf reference](https://github.com/roelofrossouw/simply-cpp/wiki/Reference-sc-html2pdf).
 
@@ -26,7 +26,7 @@ settings.css = "body { font-family: Roboto, sans-serif; font-size: 10pt }";
 settings.margins = {.top = 10, .right = 10, .bottom = 10, .left = 30, .first_top = 60}; // mm
 settings.toc_page = 2;                                    // a table of contents on page 2
 settings.metadata["Author"] = "Accounts";
-settings.protection = sc::pdf::protection{.user_password = "open"};
+settings.protection = sc::pdflite::protection{.user_password = "open"};
 
 const sc::html2pdf pdf{html, settings};                   // laid out and cut into pages
 pdf.save("report.pdf");
@@ -105,7 +105,7 @@ same from the command line.
 ## Building locally
 
 Run `bash scripts/install.sh` to configure, build, test, package and install.
-It needs sc-litehtml and sc-pdf (installed if missing).
+It needs sc-litehtml and sc-pdflite (installed if missing).
 
 ```bash
 sudo curl -fsSL https://apt.roelof.co.za/setup.sh | bash
