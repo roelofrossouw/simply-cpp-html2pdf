@@ -423,6 +423,35 @@ int main() {
         CHECK(!alone);
     }
 
+    SECTION("A table's header row moves with its first row; a heading kept with it moves too");
+    {
+        sc::html2pdf::options settings;
+        settings.builtin_fonts = true;
+        settings.margins.first_top = 10;
+        settings.keep_with_next = "h2";
+        settings.css = "table { border-collapse: collapse; margin: 4pt 0 8pt 0 } th, td { padding: 3pt 4pt } td { border-bottom: 0.5pt solid #000 }";
+        bool alone = false, apart = false;
+        for (int spacer = 940; spacer <= 1050; spacer += 2) { // the table's start moved over page 1's foot
+            for (const bool heading: {false, true}) {
+                std::string html = "<div style='height: " + std::to_string(spacer) + "px'></div>";
+                if (heading) html += "<h2>Headingword</h2>";
+                html += "<table><thead><tr><th>HeadCell</th><th>Amount</th></tr></thead><tbody>";
+                for (int i = 0; i < 6; ++i) html += "<tr><td>Row " + std::to_string(i) + "</td><td>" + std::to_string(i) + "</td></tr>";
+                html += "</tbody></table>";
+                const auto path = directory / "header-with-row.pdf";
+                sc::html2pdf::converter{html, settings}.save(path);
+                const sc::pdflite::reader file{path};
+                for (std::size_t i = 0; i < file.page_count(); ++i) {
+                    const auto text = page_content(file, i);
+                    if (contains(text, "(HeadCell)") && !contains(text, "(Row)")) alone = true;
+                    if (heading && contains(text, "(Headingword)") && !contains(text, "(HeadCell)")) apart = true;
+                }
+            }
+        }
+        CHECK(!alone);
+        CHECK(!apart);
+    }
+
     SECTION("Mistakes");
     {
         sc::html2pdf::options settings;

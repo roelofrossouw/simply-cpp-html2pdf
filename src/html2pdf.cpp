@@ -176,6 +176,8 @@ namespace sc {
         // which band they're from.
         std::vector<double> leads;
         std::vector<std::size_t> lead_bands;
+        // A table's header rows kept with its first body row: never alone at a page's foot.
+        std::vector<kept> header_keeps;
 
         // The table of contents, when there's one.
         std::optional<litehtml::html> toc;
@@ -311,7 +313,8 @@ namespace sc {
         }
 
         void paginate_content() {
-            const auto [breaks, whole] = breaks_of(*content, settings.keep_with_next);
+            auto [breaks, whole] = breaks_of(*content, settings.keep_with_next);
+            whole.insert(whole.end(), header_keeps.begin(), header_keeps.end());
             const double total = total_of(*content, recorded);
             cuts = paginate(recorded, recorded_sizes, total, breaks, whole, [&](const std::size_t i) { return page_of_content(i); }, &leads, &lead_bands);
         }
@@ -543,8 +546,9 @@ namespace sc {
                 }
                 std::ranges::stable_sort(headings, {}, &heading::top);
             }
-            if (settings.repeat_table_headers) {
+            {
                 const auto tables = content->select("table");
+                const auto rows = content->select("tr");
                 for (const auto &head: content->select("thead")) {
                     const rect h = head.box();
                     if (h.height() <= 0) continue;
@@ -554,6 +558,16 @@ namespace sc {
                         if (t.top() <= h.top() + 0.5 && t.bottom() >= h.bottom() - 0.5 && (!table || t.top() >= table->top())) table = t;
                     }
                     if (!table) continue;
+                    // The header and the first body row stay on one page (a heading kept with the
+                    // table reaches into the header, so the three move together).
+                    std::optional<rect> first;
+                    for (const auto &row: rows) {
+                        const rect r = row.box();
+                        if (r.top() >= h.bottom() - 0.5 && r.bottom() <= table->bottom() + 0.5 && r.left() >= table->left() - 0.5 &&
+                            r.right() <= table->right() + 0.5 && r.height() > 0 && (!first || r.top() < first->top()))
+                            first = r;
+                    }
+                    if (first) header_keeps.push_back({h.top(), first->bottom()});
                     // Its rows' last text (or image), so a page that starts after them doesn't repeat the header.
                     double last_text = -1;
                     for (std::size_t k = 0; k < recorded.items().size(); ++k) {
