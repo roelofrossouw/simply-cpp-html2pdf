@@ -61,6 +61,14 @@ under the `<subtitle>`s before it, each linked to its page; the pages after it
 are numbered on. The outline (bookmarks) holds the same entries, or else the
 `h1` to `h3` headings.
 
+**Headings as the table of contents**: `settings.toc_headings = "h2, h3"` lists those headings
+instead of `<section>`s (no page break at each), every entry linked to where its heading landed
+(paragraphs of class `toc-h2`, `toc-h3` to indent, the number in `toc-page`), and the outline
+holds the same. `settings.keep_with_next = "h1, h2, h3"` moves a heading that would end a page,
+or leave less than about two lines after it, to the next page. A table cut across pages shows its
+`<thead>` rows again at the top of each page it goes on to (`repeat_table_headers`, on by
+default).
+
 **Links**: `#page=3` goes to page 3, `#id` to wherever that element landed,
 anything else is resolved against the base URL.
 

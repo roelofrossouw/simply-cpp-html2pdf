@@ -115,6 +115,18 @@ namespace sc {
             return std::string{text.substr(start, text.find_last_not_of(" \t\r\n") - start + 1)};
         }
 
+        // text as HTML: its markup characters escaped.
+        std::string html_text(const std::string_view text) {
+            std::string out;
+            for (const char c: text) {
+                if (c == '&') out += "&amp;";
+                else if (c == '<') out += "&lt;";
+                else if (c == '>') out += "&gt;";
+                else out += c;
+            }
+            return out;
+        }
+
         // text for an HTML attribute's value in double quotes.
         std::string attribute_text(const std::string_view text) {
             std::string out;
@@ -144,6 +156,25 @@ namespace sc {
         std::vector<measured> recorded_sizes;
         std::vector<cut> cuts;
         std::vector<marker> markers;
+
+        // The table of contents' headings (toc_headings), in order.
+        struct heading {
+            int level;
+            std::string text, id;
+            double top;
+            double inside; // a point inside its first line: the page it's on is the one that shows its text
+        };
+        std::vector<heading> headings;
+
+        // Tables with header rows (repeat_table_headers): the table's and its <thead>'s extent.
+        struct header_band {
+            double table_top, table_bottom, head_top, head_bottom;
+        };
+        std::vector<header_band> bands;
+        // For each content page (cut), the height its repeated header rows take at its top (px), and
+        // which band they're from.
+        std::vector<double> leads;
+        std::vector<std::size_t> lead_bands;
 
         // The table of contents, when there's one.
         std::optional<litehtml::html> toc;
@@ -187,9 +218,21 @@ namespace sc {
         // Cuts a recorded document into pages, its page i (from 0) landing on page_of(i): each page
         // ends at the next hard break, or else as low as it can without going through text, an
         // image or a box kept whole.
+        // The header band a page starting at start repeats (a table goes on past start, its header
+        // rows above it), the innermost; none when it starts outside a table.
+        [[nodiscard]] std::optional<std::size_t> band_at(const double start) const {
+            std::optional<std::size_t> found;
+            for (std::size_t i = 0; i < bands.size(); ++i) {
+                const auto &band = bands[i];
+                if (band.head_bottom <= start + 0.5 && start < band.table_bottom - 0.5 && (!found || band.table_top >= bands[*found].table_top)) found = i;
+            }
+            return found;
+        }
+
         template<typename PageOf>
         std::vector<cut> paginate(const graphics::drawing &picture, const std::vector<measured> &sizes, const double total,
-                                  std::vector<double> breaks, std::vector<kept> whole, PageOf page_of) const {
+                                  std::vector<double> breaks, std::vector<kept> whole, PageOf page_of, std::vector<double> *page_leads = nullptr,
+                                  std::vector<std::size_t> *page_bands = nullptr) const {
             const auto height = [&](const std::size_t i) { return content_area(page_of(i)).height() / points_per_px; };
             const double tallest = std::max(height(0), height(1)); // a box taller than a page is cut after all
             const auto &items = picture.items();
@@ -198,10 +241,24 @@ namespace sc {
                     whole.push_back({sizes[i].box.top(), sizes[i].box.bottom(), sizes[i].reach});
             std::ranges::sort(breaks);
             std::vector<cut> out;
+            if (page_leads) page_leads->clear();
+            if (page_bands) page_bands->clear();
             double start = 0;
             for (unsigned page = 0; start < total - 0.5; ++page) {
+                // Room for a table's header rows repeated at the top, when the page starts inside it.
+                double lead = 0;
+                std::size_t band = 0;
+                if (page_leads && settings.repeat_table_headers) {
+                    if (const auto found = band_at(start)) {
+                        band = *found;
+                        lead = bands[band].head_bottom - bands[band].head_top;
+                        if (lead > height(page) / 2) lead = 0; // a header that big isn't repeated
+                    }
+                }
+                if (page_leads) page_leads->push_back(lead);
+                if (page_bands) page_bands->push_back(band);
                 // At the next hard break, unless there's nothing above it on the page.
-                double hard = start + height(page);
+                double hard = start + height(page) - lead;
                 for (const double at: breaks)
                     if (at > start + 0.5 && at < hard && std::ranges::any_of(whole, [&](const kept &box) { return box.top >= start - 0.01 && box.top < at; })) {
                         hard = at;
@@ -225,7 +282,7 @@ namespace sc {
         }
 
         // The tops of what starts a page, and the boxes kept whole, in a document.
-        static std::pair<std::vector<double>, std::vector<kept> > breaks_of(const litehtml::html &document) {
+        static std::pair<std::vector<double>, std::vector<kept> > breaks_of(const litehtml::html &document, const std::string &keep_with_next = {}) {
             std::vector<double> breaks;
             std::vector<kept> whole;
             for (const auto &element: document.select("section, [style]")) {
@@ -239,6 +296,12 @@ namespace sc {
                 if (styled(style, "page-break-inside", {"avoid"}) || styled(style, "break-inside", {"avoid", "avoid-page"}))
                     whole.push_back({box.top(), box.bottom()});
             }
+            // Kept with about two lines of what follows (36 px: two lines of 10 pt text).
+            if (!keep_with_next.empty())
+                for (const auto &element: document.select(keep_with_next)) {
+                    const rect box = element.box();
+                    whole.push_back({box.top(), box.bottom() + 36});
+                }
             return {breaks, whole};
         }
 
@@ -247,10 +310,12 @@ namespace sc {
         }
 
         void paginate_content() {
-            const auto [breaks, whole] = breaks_of(*content);
+            const auto [breaks, whole] = breaks_of(*content, settings.keep_with_next);
             const double total = total_of(*content, recorded);
-            cuts = paginate(recorded, recorded_sizes, total, breaks, whole, [&](const std::size_t i) { return page_of_content(i); });
+            cuts = paginate(recorded, recorded_sizes, total, breaks, whole, [&](const std::size_t i) { return page_of_content(i); }, &leads, &lead_bands);
         }
+
+        [[nodiscard]] double lead_of(const std::size_t i) const { return i < leads.size() ? leads[i] : 0; }
 
         // What #tag# shows on a page, from the first marker on the latest page up to it that has
         // one: its image when its text is an image's path (whatever its alt), else its text.
@@ -402,6 +467,15 @@ namespace sc {
 
         [[nodiscard]] std::string toc_html() const {
             std::string out = "<div class=\"toc\"><h1 class=\"title\">" + settings.toc_title + "</h1>";
+            if (!settings.toc_headings.empty()) {
+                for (const auto &each: headings) {
+                    const auto page = std::to_string(page_of_content(cut_at(cuts, each.inside)));
+                    const std::string href = each.id.empty() ? "#page=" + page : "#" + attribute_text(each.id);
+                    out += "<p class=\"toc-h" + std::to_string(each.level) + "\"><span class=\"toc-page\" style=\"float: right\">" + page +
+                           "</span><a href=\"" + href + "\">" + html_text(each.text) + "</a></p>";
+                }
+                return out + "</div>";
+            }
             for (const auto &each: markers) {
                 if (each.tag == "subtitle") {
                     out += "<h2>" + each.text + "</h2>";
@@ -457,6 +531,29 @@ namespace sc {
                 auto text = element.attribute("alt").value_or("");
                 if (text.empty()) text = own;
                 markers.push_back({element.name(), text, image_path(own) ? own : std::string{}, element.box().top()});
+            }
+
+            if (!settings.toc_headings.empty()) {
+                for (const auto &element: content->select(settings.toc_headings)) {
+                    const auto tag = element.name();
+                    const int level = tag.size() == 2 && (tag[0] == 'h' || tag[0] == 'H') && tag[1] >= '1' && tag[1] <= '6' ? tag[1] - '0' : 1;
+                    const rect box = element.box();
+                    headings.push_back({level, trimmed(element.text()), element.attribute("id").value_or(""), box.top(), box.top() + std::min(box.height(), 30.0) / 2});
+                }
+                std::ranges::stable_sort(headings, {}, &heading::top);
+            }
+            if (settings.repeat_table_headers) {
+                const auto tables = content->select("table");
+                for (const auto &head: content->select("thead")) {
+                    const rect h = head.box();
+                    if (h.height() <= 0) continue;
+                    std::optional<rect> table;
+                    for (const auto &each: tables) {
+                        const rect t = each.box();
+                        if (t.top() <= h.top() + 0.5 && t.bottom() >= h.bottom() - 0.5 && (!table || t.top() >= table->top())) table = t;
+                    }
+                    if (table) bands.push_back({table->top(), table->bottom(), h.top(), h.bottom()});
+                }
             }
 
             // The table of contents' length moves the pages after it, which its entries number:
@@ -521,7 +618,9 @@ namespace sc {
         }
 
         [[nodiscard]] std::optional<placed> content_place(const double x, const double y) const {
-            return place(cuts, [&](const std::size_t i) { return page_of_content(i); }, x, y);
+            auto at = place(cuts, [&](const std::size_t i) { return page_of_content(i); }, x, y);
+            at.y += lead_of(cut_at(cuts, y)) * points_per_px;
+            return at;
         }
 
         [[nodiscard]] std::optional<placed> toc_place(const double x, const double y) const {
@@ -560,6 +659,15 @@ namespace sc {
         }
 
         void add_outline(pdflite::writer &file) const {
+            if (!settings.toc_headings.empty()) {
+                int top = 6;
+                for (const auto &each: headings) top = std::min(top, each.level);
+                for (const auto &each: headings) {
+                    const auto at = content_place(0, std::max(each.top, cuts[cut_at(cuts, each.inside)].top));
+                    file.add_outline(each.text, at->page, at->y, each.level - top);
+                }
+                return;
+            }
             bool titled = false;
             for (const auto &each: markers) {
                 if (each.tag == "subsection") continue;
@@ -593,7 +701,26 @@ namespace sc {
             file->image_resolution(settings.image_resolution);
             file->set_page(page_count());
 
-            draw_pages(*file, recorded, recorded_sizes, cuts, [&](const std::size_t i) { return page_of_content(i); });
+            for (std::size_t i = 0; i < cuts.size(); ++i) {
+                checked();
+                const unsigned page = page_of_content(i);
+                file->set_page(page);
+                rect area = content_area(page);
+                if (const double lead = lead_of(i); lead > 0) {
+                    // The table's header rows again, then the page's own part below them.
+                    const auto &band = bands[lead_bands[i]];
+                    graphics::drawing head;
+                    const auto &items = recorded.items();
+                    for (std::size_t k = 0; k < items.size(); ++k) {
+                        const rect &box = recorded_sizes[k].box;
+                        if (box.top() >= band.head_top - 0.5 && box.bottom() <= band.head_bottom + 0.5) head.add(items[k]);
+                    }
+                    head.apply(transform::translate(0, -band.head_top).then(transform::scale(points_per_px)).then(transform::translate(area.left(), area.top())));
+                    file->draw(head);
+                    area = rect{area.left(), area.top() + lead * points_per_px, area.width(), std::max(1.0, area.height() - lead * points_per_px)};
+                }
+                draw_part(*file, recorded, recorded_sizes, cuts[i], area);
+            }
             draw_pages(*file, toc_recorded, toc_sizes, toc_cuts, [&](const std::size_t i) { return page_of_toc(i); });
             add_links(*file, *content, [&](const double x, const double y) { return content_place(x, y); }, *content);
             if (toc) add_links(*file, *toc, [&](const double x, const double y) { return toc_place(x, y); }, *content);

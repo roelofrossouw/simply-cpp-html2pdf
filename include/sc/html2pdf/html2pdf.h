@@ -44,6 +44,18 @@ namespace sc::html2pdf {
         unsigned toc_page = 0;
         std::string toc_title = "Table of Contents";
         bool outline = true;
+        /// Headings for the table of contents (a CSS selector: "h2, h3") in place of <section>s:
+        /// each entry links to where its heading landed, in a paragraph of class toc-h2, toc-h3 ...
+        /// (for CSS to indent), its page number in a span of class toc-page. The outline holds the
+        /// same headings. Empty: the sections are listed, as before.
+        std::string toc_headings;
+        /// What stays on a page with the start of what follows it (a CSS selector: "h1, h2, h3"):
+        /// an element that would end a page, or leave less than about two lines after it there,
+        /// moves to the next page.
+        std::string keep_with_next;
+        /// A table cut across pages shows its header rows (<thead>) again at the top of each page
+        /// it goes on to, as browsers print it.
+        bool repeat_table_headers = true;
         /// "Title", "Author", "Subject", "Keywords", "Creator", "Producer" or your own; the title
         /// defaults to the HTML's <title>, the producer to "simply-cpp-html2pdf 1.4.1
         /// (simply-cpp-pdflite 4.6.0)", their versions.

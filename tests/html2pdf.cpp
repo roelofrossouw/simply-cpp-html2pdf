@@ -323,6 +323,88 @@ int main() {
         CHECK(contains(text, "1 0.6 0 rg"));
     }
 
+    SECTION("A table of contents of headings, linked to them; the outline the same");
+    {
+        sc::html2pdf::options settings;
+        settings.builtin_fonts = true;
+        settings.toc_page = 2;
+        settings.toc_headings = "h2, h3";
+        settings.toc_title = "Contents";
+        const std::string html = "<h1>Title</h1>" + paragraphs(5) + "<h2 id='first-part'>First part</h2>" + paragraphs(40) +
+                                 "<h3 id='a-detail'>A detail &amp; more</h3>" + paragraphs(5) + "<h2>Second part</h2>" + paragraphs(5);
+        const sc::html2pdf::converter pdf{html, settings};
+        const auto path = directory / "toc-headings.pdf";
+        pdf.save(path);
+        const sc::pdflite::reader file{path};
+        const auto toc = page_content(file, 1);
+        CHECK(contains(toc, "(Contents)"));
+        CHECK(contains(toc, "(First)")); // the built-in fonts' text is written word by word
+        CHECK(contains(toc, "(&)"));
+        CHECK(contains(toc, "(Second)"));
+        CHECK(!contains(toc, "(Title)")); // h1 isn't asked for
+        CHECK_EQ(count(read(path), "/Subtype /Link"), std::size_t{3}); // an entry each
+        const auto outlines = file.resolve(file.catalog().at("Outlines")).as<sc::pdflite::dictionary>();
+        CHECK(outlines.contains("First"));
+        // The section's heading on the page its entry says.
+        std::size_t second = 0;
+        for (std::size_t i = 2; i < file.page_count(); ++i)
+            if (contains(page_content(file, i), "(Second)")) second = i + 1;
+        CHECK(second > 2 && contains(toc, "(" + std::to_string(second) + ")"));
+    }
+
+    SECTION("A heading kept with what follows it");
+    {
+        // Wherever the heading falls, with keep_with_next it's on the page its paragraph starts.
+        bool apart = false;
+        for (int spacer = 960; spacer <= 1050; spacer += 3) { // the heading moved down to page 1's foot (about 1047 px high)
+            const std::string html = "<div style='height: " + std::to_string(spacer) + "px'></div><h2>Headingword</h2><p>Afterword follows.</p>" +
+                                     paragraphs(10, "Ipsum");
+            const auto page_of = [&](const sc::html2pdf::options &settings, const std::string &text) {
+                const auto path = directory / "keep.pdf";
+                sc::html2pdf::converter{html, settings}.save(path);
+                const sc::pdflite::reader file{path};
+                for (std::size_t i = 0; i < file.page_count(); ++i)
+                    if (contains(page_content(file, i), text)) return i;
+                return std::size_t{99};
+            };
+            sc::html2pdf::options loose;
+            loose.builtin_fonts = true;
+            loose.margins.first_top = 10;
+            sc::html2pdf::options kept = loose;
+            kept.keep_with_next = "h2";
+            if (page_of(loose, "(Headingword)") != page_of(loose, "(Afterword)")) apart = true;
+            CHECK_EQ(page_of(kept, "(Headingword)"), page_of(kept, "(Afterword)"));
+        }
+        CHECK(apart); // some of them would have been left at a page's foot
+    }
+
+    SECTION("A long table's header rows on every page it goes on to");
+    {
+        std::string html = "<table><thead><tr><th>HeadCell</th><th>Amount</th></tr></thead><tbody>";
+        for (int i = 0; i < 150; ++i) html += "<tr><td>Row " + std::to_string(i) + "</td><td>" + std::to_string(i * 10) + "</td></tr>";
+        html += "</tbody></table><p>Under the table.</p>";
+        sc::html2pdf::options settings;
+        settings.builtin_fonts = true;
+        settings.margins.first_top = 10;
+        const auto pages_with = [&](const sc::html2pdf::options &given) {
+            const auto path = directory / "table-headers.pdf";
+            sc::html2pdf::converter{html, given}.save(path);
+            const sc::pdflite::reader file{path};
+            std::size_t heads = 0, rows = 0;
+            for (std::size_t i = 0; i < file.page_count(); ++i) {
+                const auto text = page_content(file, i);
+                if (contains(text, "(Row)")) ++rows;
+                heads += count(text, "(HeadCell)");
+            }
+            return std::pair{heads, rows};
+        };
+        const auto [heads, rows] = pages_with(settings);
+        CHECK(rows >= 3);
+        CHECK_EQ(heads, rows); // once on each page of rows
+        settings.repeat_table_headers = false;
+        CHECK_EQ(pages_with(settings).first, std::size_t{1});
+    }
+
     SECTION("Mistakes");
     {
         sc::html2pdf::options settings;
