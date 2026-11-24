@@ -169,6 +169,7 @@ namespace sc {
         // Tables with header rows (repeat_table_headers): the table's and its <thead>'s extent.
         struct header_band {
             double table_top, table_bottom, head_top, head_bottom;
+            double last_text; // the top of its last line of text or image: a page starting below it has none of its rows
         };
         std::vector<header_band> bands;
         // For each content page (cut), the height its repeated header rows take at its top (px), and
@@ -224,7 +225,7 @@ namespace sc {
             std::optional<std::size_t> found;
             for (std::size_t i = 0; i < bands.size(); ++i) {
                 const auto &band = bands[i];
-                if (band.head_bottom <= start + 0.5 && start < band.table_bottom - 0.5 && (!found || band.table_top >= bands[*found].table_top)) found = i;
+                if (band.head_bottom <= start + 0.5 && start <= band.last_text + 0.5 && (!found || band.table_top >= bands[*found].table_top)) found = i;
             }
             return found;
         }
@@ -552,7 +553,16 @@ namespace sc {
                         const rect t = each.box();
                         if (t.top() <= h.top() + 0.5 && t.bottom() >= h.bottom() - 0.5 && (!table || t.top() >= table->top())) table = t;
                     }
-                    if (table) bands.push_back({table->top(), table->bottom(), h.top(), h.bottom()});
+                    if (!table) continue;
+                    // Its rows' last text (or image), so a page that starts after them doesn't repeat the header.
+                    double last_text = -1;
+                    for (std::size_t k = 0; k < recorded.items().size(); ++k) {
+                        const rect &box = recorded_sizes[k].box;
+                        if (atomic(recorded.items()[k]) && box.top() >= h.bottom() - 0.5 && box.bottom() <= table->bottom() + 0.5 &&
+                            box.left() >= table->left() - 0.5 && box.right() <= table->right() + 0.5)
+                            last_text = std::max(last_text, box.top());
+                    }
+                    if (last_text >= 0) bands.push_back({table->top(), table->bottom(), h.top(), h.bottom(), last_text});
                 }
             }
 
@@ -591,6 +601,15 @@ namespace sc {
             const auto &items = picture.items();
             for (std::size_t i = 0; i < items.size(); ++i) {
                 const auto &[box, reach] = sizes[i];
+                // A thin line just past a cut (a table row's bottom border) ends the page before
+                // rather than starting the next one alone.
+                const bool hairline = box.height() <= 2 && !atomic(items[i]);
+                if (hairline && part.top > 0 && box.top() >= part.top - 0.01 && box.top() < part.top + 2) continue;
+                if (hairline && box.top() >= part.bottom && box.top() < part.bottom + 2) {
+                    below = std::max(below, box.bottom() - part.bottom);
+                    shown.add(items[i]);
+                    continue;
+                }
                 if (box.bottom() <= part.top + 0.01 || box.top() >= part.bottom) continue;
                 // What reaches only a little past a cut is on the page its top is on, all of it.
                 if (box.top() < part.top - 0.01 && box.bottom() <= part.top + reach) continue;

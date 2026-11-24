@@ -403,6 +403,24 @@ int main() {
         CHECK_EQ(heads, rows); // once on each page of rows
         settings.repeat_table_headers = false;
         CHECK_EQ(pages_with(settings).first, std::size_t{1});
+
+        // A table ending at a page's foot: no header alone on the next page.
+        settings.repeat_table_headers = true;
+        settings.css = "table { border-collapse: collapse; margin: 4pt 0 8pt 0 } td { padding: 3pt 4pt; border-bottom: 0.5pt solid #000 }";
+        bool alone = false;
+        for (int spacer = 0; spacer <= 80; ++spacer) {
+            std::string ending = "<div style='height: " + std::to_string(spacer) + "px'></div><table><thead><tr><th>HeadCell</th></tr></thead><tbody>";
+            for (int i = 0; i < 48; ++i) ending += "<tr><td>Row " + std::to_string(i) + "</td></tr>";
+            ending += "</tbody></table><p>Under the table.</p>";
+            const auto path = directory / "table-end.pdf";
+            sc::html2pdf::converter{ending, settings}.save(path);
+            const sc::pdflite::reader file{path};
+            for (std::size_t i = 0; i < file.page_count(); ++i) {
+                const auto text = page_content(file, i);
+                if (contains(text, "(HeadCell)") && !contains(text, "(Row)")) alone = true;
+            }
+        }
+        CHECK(!alone);
     }
 
     SECTION("Mistakes");
