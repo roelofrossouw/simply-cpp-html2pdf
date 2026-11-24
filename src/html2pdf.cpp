@@ -47,16 +47,16 @@ namespace sc {
             return value && std::ranges::any_of(values, [&](const std::string_view wanted) { return *value == wanted; });
         }
 
-        rect bounds_of(const drawing::item &item) {
+        rect bounds_of(const graphics::drawing::item &item) {
             return std::visit([](const auto &thing) { return thing.bounds(); }, item);
         }
 
         // Text and images are cut between, never through.
-        bool atomic(const drawing::item &item) { return !std::holds_alternative<drawable>(item); }
+        bool atomic(const graphics::drawing::item &item) { return !std::holds_alternative<graphics::drawable>(item); }
 
         // So are boxes (backgrounds, borders, a vector image's shapes) that fit on a page, unless
         // they may be split.
-        bool whole(const drawing::item &item, const rect &box, const bool split_boxes, const double page) {
+        bool whole(const graphics::drawing::item &item, const rect &box, const bool split_boxes, const double page) {
             if (atomic(item)) return true;
             return !split_boxes && box.height() <= page;
         }
@@ -70,8 +70,8 @@ namespace sc {
         // (below its line box when the line height is tight: no reason to move the line to the
         // next page), a box a pixel (litehtml rounds boxes to whole pixels, so a table row's border
         // box can reach a fraction past where the next element starts).
-        double reach_of(const drawing::item &item, const rect &box) {
-            if (std::holds_alternative<label>(item)) return 0.3 * box.height();
+        double reach_of(const graphics::drawing::item &item, const rect &box) {
+            if (std::holds_alternative<graphics::label>(item)) return 0.3 * box.height();
             return 1.0;
         }
 
@@ -82,7 +82,7 @@ namespace sc {
             double reach;
         };
 
-        std::vector<measured> measured_of(const drawing &picture) {
+        std::vector<measured> measured_of(const graphics::drawing &picture) {
             std::vector<measured> out;
             out.reserve(picture.items().size());
             for (const auto &item: picture.items()) {
@@ -128,7 +128,7 @@ namespace sc {
         }
     }
 
-    struct html2pdf::impl {
+    struct html2pdf::converter::impl {
         options settings;
         std::function<void()> check; // called now and then; throws to stop
 
@@ -140,14 +140,14 @@ namespace sc {
         double header_first = 0, header_other = 0, footer = 0; // heights, px
 
         std::optional<litehtml::html> content;
-        drawing recorded;
+        graphics::drawing recorded;
         std::vector<measured> recorded_sizes;
         std::vector<cut> cuts;
         std::vector<marker> markers;
 
         // The table of contents, when there's one.
         std::optional<litehtml::html> toc;
-        drawing toc_recorded;
+        graphics::drawing toc_recorded;
         std::vector<measured> toc_sizes;
         std::vector<cut> toc_cuts;
         unsigned toc_start = 0; // the page it starts on; 0 for none
@@ -188,7 +188,7 @@ namespace sc {
         // ends at the next hard break, or else as low as it can without going through text, an
         // image or a box kept whole.
         template<typename PageOf>
-        std::vector<cut> paginate(const drawing &picture, const std::vector<measured> &sizes, const double total,
+        std::vector<cut> paginate(const graphics::drawing &picture, const std::vector<measured> &sizes, const double total,
                                   std::vector<double> breaks, std::vector<kept> whole, PageOf page_of) const {
             const auto height = [&](const std::size_t i) { return content_area(page_of(i)).height() / points_per_px; };
             const double tallest = std::max(height(0), height(1)); // a box taller than a page is cut after all
@@ -242,7 +242,7 @@ namespace sc {
             return {breaks, whole};
         }
 
-        static double total_of(const litehtml::html &document, const drawing &picture) {
+        static double total_of(const litehtml::html &document, const graphics::drawing &picture) {
             return std::max(document.height(), picture.empty() ? 0.0 : picture.bounds().bottom());
         }
 
@@ -308,7 +308,7 @@ namespace sc {
         // are (most fonts', and the built-in fonts'). Where that can't be relied on, it isn't reused.
         struct part {
             std::optional<litehtml::html> document;
-            drawing picture;
+            graphics::drawing picture;
             std::string placeholder; // what stands for the page number in its words; empty: none
             bool reusable = false;
         };
@@ -343,7 +343,7 @@ namespace sc {
         }
 
         // Whether a font's digits are all as wide (so any number of a length lays out the same).
-        bool tabular(const sc::font &font) const {
+        bool tabular(const sc::graphics::font &font) const {
             if (settings.builtin_fonts) return true; // the built-in fonts' digits are (Adobe's metrics)
             const double zero = font.width("0");
             for (const char *digit: {"1", "2", "3", "4", "5", "6", "7", "8", "9"})
@@ -353,7 +353,7 @@ namespace sc {
 
         // The header or footer html for a page: its drawing (in px, from its top left), and the
         // document (for its links), from parts when laid out before.
-        std::pair<drawing, const litehtml::html *> part_for(std::map<std::string, part> &parts, const std::string &html, const unsigned page,
+        std::pair<graphics::drawing, const litehtml::html *> part_for(std::map<std::string, part> &parts, const std::string &html, const unsigned page,
                                                        std::optional<litehtml::html> &alone) const {
             const std::string number = std::to_string(page);
             const auto pages_in = occurrences(html, "#Page#");
@@ -375,7 +375,7 @@ namespace sc {
                 std::size_t seen = 0;
                 bool fits = true;
                 for (const auto &item: each.picture.items()) {
-                    if (const auto *words = std::get_if<label>(&item); words && pages_in) {
+                    if (const auto *words = std::get_if<graphics::label>(&item); words && pages_in) {
                         const auto here = occurrences(words->text.content, placeholder);
                         seen += here;
                         if (here && !tabular(words->text.font)) fits = false;
@@ -387,11 +387,11 @@ namespace sc {
                 alone.emplace(laid_out(filled(html, page), page));
                 return {alone->drawing(), &*alone};
             }
-            drawing out = each.picture;
+            graphics::drawing out = each.picture;
             if (!each.placeholder.empty()) {
-                drawing numbered;
+                graphics::drawing numbered;
                 for (auto item: out.items()) {
-                    if (auto *words = std::get_if<label>(&item)) replace_all(words->text.content, each.placeholder, number);
+                    if (auto *words = std::get_if<graphics::label>(&item)) replace_all(words->text.content, each.placeholder, number);
                     numbered.add(std::move(item));
                 }
                 numbered.page(out.page());
@@ -477,7 +477,7 @@ namespace sc {
         }
 
         template<typename PageOf>
-        void draw_pages(pdflite::writer &file, const drawing &picture, const std::vector<measured> &sizes, const std::vector<cut> &pages,
+        void draw_pages(pdflite::writer &file, const graphics::drawing &picture, const std::vector<measured> &sizes, const std::vector<cut> &pages,
                         PageOf page_of) const {
             for (std::size_t i = 0; i < pages.size(); ++i) {
                 checked();
@@ -488,8 +488,8 @@ namespace sc {
         }
 
         // The part of a recorded document a page shows, placed on it and clipped to its area.
-        static void draw_part(pdflite::writer &file, const drawing &picture, const std::vector<measured> &sizes, const cut &part, const rect &area) {
-            drawing shown;
+        static void draw_part(pdflite::writer &file, const graphics::drawing &picture, const std::vector<measured> &sizes, const cut &part, const rect &area) {
+            graphics::drawing shown;
             double below = 0; // how far a line's descender reaches past the page's cut
             const auto &items = picture.items();
             for (std::size_t i = 0; i < items.size(); ++i) {
@@ -576,7 +576,7 @@ namespace sc {
         }
 
         void draw_margins(pdflite::writer &file, const unsigned page) const {
-            const sc::stroke red{sc::color{0.65, 0, 0}, 0.5}, green{sc::color{0.5, 0.65, 0}, 0.5};
+            const sc::graphics::stroke red{sc::color{0.65, 0, 0}, 0.5}, green{sc::color{0.5, 0.65, 0}, 0.5};
             const double left = points(settings.margins.left), right = page_width - points(settings.margins.right);
             const double top = margin_top(page), bottom = page_height - points(settings.margins.bottom);
             file.draw(rect{left, top, right - left, bottom - top}, red);
@@ -636,25 +636,25 @@ namespace sc {
         }
     };
 
-    html2pdf::html2pdf(const std::string_view html) : html2pdf(html, options{}) {
+    html2pdf::converter::converter(const std::string_view html) : converter(html, options{}) {
     }
 
-    html2pdf::html2pdf(const std::string_view html, options settings) : html2pdf(html, std::move(settings), {}) {
+    html2pdf::converter::converter(const std::string_view html, options settings) : converter(html, std::move(settings), {}) {
     }
 
-    html2pdf::html2pdf(const std::string_view html, options settings, std::function<void()> check)
+    html2pdf::converter::converter(const std::string_view html, options settings, std::function<void()> check)
         : impl_(std::make_unique<impl>(html, std::move(settings), std::move(check))) {
     }
 
-    html2pdf::html2pdf(html2pdf &&) noexcept = default;
-    html2pdf &html2pdf::operator=(html2pdf &&) noexcept = default;
-    html2pdf::~html2pdf() = default;
+    html2pdf::converter::converter(converter &&) noexcept = default;
+    html2pdf::converter &html2pdf::converter::operator=(converter &&) noexcept = default;
+    html2pdf::converter::~converter() = default;
 
-    unsigned html2pdf::page_count() const { return impl_->page_count(); }
+    unsigned html2pdf::converter::page_count() const { return impl_->page_count(); }
 
-    const std::vector<html2pdf::cut> &html2pdf::cuts() const { return impl_->cuts; }
+    const std::vector<html2pdf::cut> &html2pdf::converter::cuts() const { return impl_->cuts; }
 
-    void html2pdf::save(const std::filesystem::path &file) const {
+    void html2pdf::converter::save(const std::filesystem::path &file) const {
         try {
             impl_->save(file);
         } catch (...) {
@@ -665,7 +665,7 @@ namespace sc {
         }
     }
 
-    std::string html2pdf::bytes() const {
+    std::string html2pdf::converter::bytes() const {
         // sc::pdflite::writer only writes files.
         std::string name = (std::filesystem::temp_directory_path() / "sc-html2pdf-XXXXXX").string();
         const int descriptor = mkstemp(name.data());

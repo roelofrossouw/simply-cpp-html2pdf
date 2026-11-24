@@ -60,19 +60,19 @@ int main() {
 
     SECTION("Long content flows onto more pages, cut between lines");
     {
-        const sc::html2pdf pdf{paragraphs(120)};
+        const sc::html2pdf::converter pdf{paragraphs(120)};
         CHECK_LT(1u, pdf.page_count());
         const auto &cuts = pdf.cuts();
         CHECK_EQ(cuts.front().top, 0.0);
         for (std::size_t i = 1; i < cuts.size(); ++i) CHECK_EQ(cuts[i].top, cuts[i - 1].bottom);
-        CHECK_EQ(sc::html2pdf{"<p>short</p>"}.page_count(), 1u);
+        CHECK_EQ(sc::html2pdf::converter{"<p>short</p>"}.page_count(), 1u);
     }
 
     SECTION("A section starts a new page; break styles too");
     {
-        const sc::html2pdf pdf{"<p>one</p><section>Second</section><p>two</p><div style='page-break-before: always'>three</div>"};
+        const sc::html2pdf::converter pdf{"<p>one</p><section>Second</section><p>two</p><div style='page-break-before: always'>three</div>"};
         CHECK_EQ(pdf.page_count(), 3u);
-        const sc::html2pdf first{"<section>First</section><p>at the top already</p>"};
+        const sc::html2pdf::converter first{"<section>First</section><p>at the top already</p>"};
         CHECK_EQ(first.page_count(), 1u); // no empty page before it
     }
 
@@ -95,7 +95,7 @@ int main() {
         }
         sc::html2pdf::options settings;
         settings.margins.first_top.reset();
-        const sc::html2pdf pdf{"<!DOCTYPE html><html><body style='font-family:sans-serif;font-size:10pt'>" + html + "</body></html>", settings};
+        const sc::html2pdf::converter pdf{"<!DOCTYPE html><html><body style='font-family:sans-serif;font-size:10pt'>" + html + "</body></html>", settings};
         CHECK_EQ(pdf.page_count(), 3u); // a page a section
         for (const auto &page: pdf.cuts()) CHECK_LT(100.0, page.bottom - page.top); // no page with just the last row
     }
@@ -105,7 +105,7 @@ int main() {
         sc::html2pdf::options tall, flat;
         flat.margins.first_top.reset();
         const auto many = paragraphs(60);
-        const sc::html2pdf letterhead{many, tall}, plain{many, flat};
+        const sc::html2pdf::converter letterhead{many, tall}, plain{many, flat};
         CHECK_LT(letterhead.cuts().front().bottom, plain.cuts().front().bottom);
     }
 
@@ -115,7 +115,7 @@ int main() {
         settings.toc_page = 2;
         std::string html = "<subtitle>Part one</subtitle><section>Introduction</section>" + paragraphs(30) +
                            "<section alt='The middle'>Middle</section>" + paragraphs(30) + "<section>End</section><p>fin</p>";
-        const sc::html2pdf pdf{html, settings};
+        const sc::html2pdf::converter pdf{html, settings};
         CHECK_EQ(pdf.page_count(), static_cast<unsigned>(pdf.cuts().size()) + 1);
         const auto path = directory / "toc.pdf";
         pdf.save(path);
@@ -133,7 +133,7 @@ int main() {
         settings.footer = "<p><a href='https://example.com'>example.com</a></p>";
         settings.metadata["Author"] = "html2pdf test";
         settings.protection.reset();
-        const sc::html2pdf pdf{"<html><head><title>Report</title></head><body>" + paragraphs(80) + "<p id='end'>The end</p><p><a href='#end'>to the end</a></p></body></html>", settings};
+        const sc::html2pdf::converter pdf{"<html><head><title>Report</title></head><body>" + paragraphs(80) + "<p id='end'>The end</p><p><a href='#end'>to the end</a></p></body></html>", settings};
         const auto path = directory / "headers.pdf";
         pdf.save(path);
         const auto file = read(path);
@@ -158,7 +158,7 @@ int main() {
         settings.footer = "<p style='text-align: center'>#Page# - 10 - 0 - #section#</p>";
         std::string html;
         for (int part = 1; part <= 3; ++part) html += "<section>Part " + std::to_string(part) + "</section>" + paragraphs(120);
-        const sc::html2pdf pdf{html, settings};
+        const sc::html2pdf::converter pdf{html, settings};
         CHECK_LT(12u, pdf.page_count()); // one and two digits
         const auto path = directory / "numbered.pdf";
         pdf.save(path);
@@ -181,7 +181,7 @@ int main() {
         const std::string banner = SC_HTML2PDF_TEST_BANNER;
         sc::html2pdf::options settings;
         settings.footer = "<img src='" + banner + "' style='width: 96px'>";
-        const sc::html2pdf pdf{"<img src='" + banner + "' style='width: 192px'>" + paragraphs(80), settings};
+        const sc::html2pdf::converter pdf{"<img src='" + banner + "' style='width: 192px'>" + paragraphs(80), settings};
         CHECK_LT(2u, pdf.page_count());
         const auto path = directory / "images.pdf";
         pdf.save(path);
@@ -190,7 +190,7 @@ int main() {
         CHECK(contains(file, "/Width 300 /Height 100 "));
 
         settings.image_resolution = 0; // kept as it is
-        sc::html2pdf{"<img src='" + banner + "' style='width: 192px'>" + paragraphs(80), settings}.save(path);
+        sc::html2pdf::converter{"<img src='" + banner + "' style='width: 192px'>" + paragraphs(80), settings}.save(path);
         file = read(path);
         CHECK_EQ(count(file, "/Subtype /Image"), std::size_t{1});
         CHECK(contains(file, "/Width 600 /Height 200 "));
@@ -203,14 +203,14 @@ int main() {
         settings.header = "<table><tr><td style='width: 100px'>#section#</td></tr></table>";
         settings.toc_page = 1;
         const auto path = directory / "section-image.pdf";
-        sc::html2pdf{"<section alt='Details of Brokerage'>\n  " + banner + "\n</section>" + paragraphs(20), settings}.save(path);
+        sc::html2pdf::converter{"<section alt='Details of Brokerage'>\n  " + banner + "\n</section>" + paragraphs(20), settings}.save(path);
         auto file = read(path);
         CHECK_EQ(count(file, "/Subtype /Image"), std::size_t{1}); // the banner in the header, written once
         CHECK(contains(file, "Details of Brokerage"));             // the table of contents and outline
         CHECK(!contains(file, "banner.png"));                      // the path itself isn't text anywhere
 
         // A section of text shows its text, as before.
-        sc::html2pdf{"<section alt='Cover'>Cover page</section>" + paragraphs(20), settings}.save(path);
+        sc::html2pdf::converter{"<section alt='Cover'>Cover page</section>" + paragraphs(20), settings}.save(path);
         file = read(path);
         CHECK_EQ(count(file, "/Subtype /Image"), std::size_t{0});
     }
@@ -221,7 +221,7 @@ int main() {
         settings.builtin_fonts = true;
         settings.header = "<p style='font-family: serif'>Page #Page#</p>";
         const auto path = directory / "builtin.pdf";
-        sc::html2pdf{"<h1>Café</h1><p style='font-family: Arial'>Plain text, € and “quotes”.</p><pre>code</pre>", settings}.save(path);
+        sc::html2pdf::converter{"<h1>Café</h1><p style='font-family: Arial'>Plain text, € and “quotes”.</p><pre>code</pre>", settings}.save(path);
         const auto file = read(path);
         CHECK(contains(file, "/BaseFont /Helvetica-Bold")); // the h1
         CHECK(contains(file, "/BaseFont /Times-Roman"));    // the header
@@ -231,7 +231,7 @@ int main() {
 
     SECTION("The PDF as bytes, as save() writes it");
     {
-        const sc::html2pdf pdf{"<html><head><title>In memory</title></head><body>" + paragraphs(40) + "</body></html>"};
+        const sc::html2pdf::converter pdf{"<html><head><title>In memory</title></head><body>" + paragraphs(40) + "</body></html>"};
         const auto bytes = pdf.bytes();
         const auto path = directory / "bytes.pdf";
         pdf.save(path);
@@ -245,14 +245,14 @@ int main() {
         sc::html2pdf::options settings;
         settings.protection = sc::pdflite::protection{.user_password = "secret"};
         const auto path = directory / "locked.pdf";
-        sc::html2pdf{"<p>hidden</p>", settings}.save(path);
+        sc::html2pdf::converter{"<p>hidden</p>", settings}.save(path);
         CHECK(contains(read(path), "/Encrypt"));
     }
 
     SECTION("A check called while laying out and writing; one that throws stops it, leaving no file");
     {
         int calls = 0;
-        const sc::html2pdf pdf{paragraphs(200), {}, [&] { ++calls; }};
+        const sc::html2pdf::converter pdf{paragraphs(200), {}, [&] { ++calls; }};
         const int laid_out = calls;
         CHECK(laid_out >= 5);
         const auto path = directory / "checked.pdf";
@@ -262,11 +262,11 @@ int main() {
 
         // Stopped while laying out: the exception comes out as it is.
         int left = 3;
-        CHECK_THROWS_AS(sc::html2pdf(paragraphs(200), {}, [&] { if (--left == 0) throw std::range_error{"stop"}; }), std::range_error);
+        CHECK_THROWS_AS(sc::html2pdf::converter(paragraphs(200), {}, [&] { if (--left == 0) throw std::range_error{"stop"}; }), std::range_error);
 
         // Stopped while writing: no half-written file.
         bool stopping = false;
-        const sc::html2pdf stopped{paragraphs(200), {}, [&] { if (stopping) throw std::range_error{"stop"}; }};
+        const sc::html2pdf::converter stopped{paragraphs(200), {}, [&] { if (stopping) throw std::range_error{"stop"}; }};
         stopping = true;
         CHECK_THROWS_AS(stopped.save(path), std::range_error);
         CHECK(!std::filesystem::exists(path));
@@ -279,7 +279,7 @@ int main() {
         // width that Adobe Reader painted as hairlines, a box round every cell.
         sc::html2pdf::options settings;
         settings.builtin_fonts = true;
-        const sc::html2pdf pdf{"<table style='border-collapse: collapse'><tr>"
+        const sc::html2pdf::converter pdf{"<table style='border-collapse: collapse'><tr>"
                                "<td style='border-right: 1px solid #ff0000'>Caption</td><td>Value</td>"
                                "<td style='border: 2px solid #0000ff'>Boxed</td></tr></table>",
                                settings};
@@ -314,7 +314,7 @@ int main() {
         // refused the page ("a colour channel outside 0 to 1").
         sc::html2pdf::options settings;
         settings.builtin_fonts = true;
-        const sc::html2pdf pdf{"<p style='color: #900'>Warning</p><p style='background: #990000; color: #f90'>Also</p>",
+        const sc::html2pdf::converter pdf{"<p style='color: #900'>Warning</p><p style='background: #990000; color: #f90'>Also</p>",
                                settings};
         const auto path = directory / "colour-0x99.pdf";
         pdf.save(path);
@@ -328,8 +328,8 @@ int main() {
         sc::html2pdf::options settings;
         settings.margins.left = 150;
         settings.margins.right = 150;
-        CHECK_THROWS_AS(sc::html2pdf("<p>x</p>", settings), std::invalid_argument);
-        CHECK_THROWS_AS(sc::html2pdf{"<p>x</p>"}.save(directory / "no-such-directory" / "x.pdf"), std::runtime_error);
+        CHECK_THROWS_AS(sc::html2pdf::converter("<p>x</p>", settings), std::invalid_argument);
+        CHECK_THROWS_AS(sc::html2pdf::converter{"<p>x</p>"}.save(directory / "no-such-directory" / "x.pdf"), std::runtime_error);
     }
 
     std::filesystem::remove_all(directory);

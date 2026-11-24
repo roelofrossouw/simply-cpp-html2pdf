@@ -13,7 +13,7 @@
 int main(int argc, char **argv) {
     const sc::params args{argc, argv, {
         {"name", "sc-html2pdf-demo"},
-        {"description", "Writes a few pages of HTML as a PDF with sc::html2pdf, with a header and footer, page numbers, a "
+        {"description", "Writes a few pages of HTML as a PDF with sc::html2pdf::converter, with a header and footer, page numbers, a "
                         "table of contents, links and a QR code, to show what a report comes out like. Open the PDF it writes to have a "
                         "look.\nMore on the wiki: https://github.com/roelofrossouw/simply-cpp/wiki/HTML-to-PDF"},
         {"positional", {
@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
 
         // [readme]
         // A qr: image is a QR code of what follows the comma, drawn as shapes: sharp at any size.
-        std::string body = "<h1>A report</h1><p>Written by sc::html2pdf from HTML and CSS.</p>"
+        std::string body = "<h1>A report</h1><p>Written by sc::html2pdf::converter from HTML and CSS.</p>"
                            "<p><img src='qr:correction=M,https://github.com/roelofrossouw/simply-cpp' style='width: 25mm'><br>"
                            "<small>Scan it for simply-cpp.</small></p>";
         for (const auto *part: {"Introduction", "Figures", "Conclusion"}) {
@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
         settings.margins.first_top = 20;
         settings.toc_page = 2;
         settings.metadata["Author"] = "sc-html2pdf-demo";
-        const sc::html2pdf pdf{body, settings};
+        const sc::html2pdf::converter pdf{body, settings};
         SC_SHOW(pdf.page_count());
         pdf.save(output);
         // [/readme]

@@ -13,14 +13,74 @@
 #include <string_view>
 #include <vector>
 
-namespace sc {
+namespace sc::html2pdf {
+    /// Lengths in millimetres.
+    struct margins {
+        double top = 10;
+        double right = 10;
+        double bottom = 10;
+        double left = 30;
+        /// The first page's top margin, when it differs (a letterhead's space, say).
+        std::optional<double> first_top = 60;
+    };
+
+    struct options {
+        graphics::page_size size = graphics::page_size::A4;
+        graphics::orientation turned = graphics::orientation::portrait;
+        html2pdf::margins margins;
+        /// HTML above and below the content of every page (their #variables# filled in).
+        std::string header;
+        std::string footer;
+        /// CSS for the content, header and footer, after the defaults and before their own.
+        std::string css;
+        /// The content's base URL, its fonts, @media type and fetching (sc::litehtml::html_options;
+        /// its css is replaced by the one above). The content, header, footer and table of
+        /// contents share its image cache, given one or not: each image is read once, and
+        /// written into the file once.
+        litehtml::html_options html;
+        /// The page the table of contents starts on (pushing what was there after it); 0 for
+        /// none. Its title, and the outline (bookmarks) made of its entries, or else of the
+        /// h1 to h3 headings.
+        unsigned toc_page = 0;
+        std::string toc_title = "Table of Contents";
+        bool outline = true;
+        /// "Title", "Author", "Subject", "Keywords", "Creator", "Producer" or your own; the title
+        /// defaults to the HTML's <title>, the producer to "simply-cpp-html2pdf 1.4.1
+        /// (simply-cpp-pdflite 4.6.0)", their versions.
+        std::map<std::string, std::string> metadata;
+        /// Passwords and rights; none leaves the file unencrypted.
+        std::optional<pdflite::protection> protection;
+        /// Text in PDF's built-in fonts (Helvetica, Times, Courier), which every reader has:
+        /// nothing embedded, smaller files. CSS families map to them (Arial and sans-serif to
+        /// Helvetica, Times New Roman and serif to Times, Courier New and monospace to Courier;
+        /// another installed family stays itself, embedded), measured with Adobe's metrics.
+        /// Characters outside Windows-1252 are embedded from an installed font.
+        bool builtin_fonts = false;
+        /// Whether a box's background, border or image may be cut across two pages, as browsers
+        /// print them. By default one that fits on a page moves to the next one whole, with
+        /// what's in it.
+        bool split_boxes = false;
+        /// Outlines the margins, header and footer areas, to check a layout.
+        bool draw_margins = false;
+        /// PNG images are written at most about this many pixels per inch, at the biggest size
+        /// they're shown: bigger ones are scaled down (sc::pdflite::writer::image_resolution()). JPEGs are
+        /// written as they are. 0 keeps every image as it is.
+        double image_resolution = 150;
+    };
+
+    /// Where the content was cut: each page's top and bottom in the laid out content (px).
+    struct cut {
+        double top;
+        double bottom;
+    };
+
     /// HTML as a PDF of pages: the content flows from page to page under a header and over a
     /// footer, cut between lines of text, images and boxes, never through them. Lengths in the HTML are
     /// CSS pixels (a point is 4/3 of one; pt, mm and em work as in print).
     ///
     ///     sc::html2pdf::options settings;
     ///     settings.header = "<p style='text-align: right'>Page #Page# of #ToPage#</p>";
-    ///     sc::html2pdf pdf{html, settings};
+    ///     sc::html2pdf::converter pdf{html, settings};
     ///     pdf.save("invoice.pdf");
     ///
     /// In the header and footer, #Page# is the page's number and #ToPage# the last page's; #section#,
@@ -36,83 +96,23 @@ namespace sc {
     /// page-break-inside: avoid keeps an element on one page when it fits on one. A link to
     /// "#page=3" goes to page 3, to "#id" where that element is; others are left as they are,
     /// relative ones resolved against the base URL.
-    class html2pdf {
+    class converter {
     public:
-        /// Lengths in millimetres.
-        struct margins {
-            double top = 10;
-            double right = 10;
-            double bottom = 10;
-            double left = 30;
-            /// The first page's top margin, when it differs (a letterhead's space, say).
-            std::optional<double> first_top = 60;
-        };
-
-        struct options {
-            page_size size = page_size::A4;
-            orientation turned = orientation::portrait;
-            html2pdf::margins margins;
-            /// HTML above and below the content of every page (their #variables# filled in).
-            std::string header;
-            std::string footer;
-            /// CSS for the content, header and footer, after the defaults and before their own.
-            std::string css;
-            /// The content's base URL, its fonts, @media type and fetching (sc::litehtml::html_options;
-            /// its css is replaced by the one above). The content, header, footer and table of
-            /// contents share its image cache, given one or not: each image is read once, and
-            /// written into the file once.
-            litehtml::html_options html;
-            /// The page the table of contents starts on (pushing what was there after it); 0 for
-            /// none. Its title, and the outline (bookmarks) made of its entries, or else of the
-            /// h1 to h3 headings.
-            unsigned toc_page = 0;
-            std::string toc_title = "Table of Contents";
-            bool outline = true;
-            /// "Title", "Author", "Subject", "Keywords", "Creator", "Producer" or your own; the title
-            /// defaults to the HTML's <title>, the producer to "simply-cpp-html2pdf 1.4.1
-            /// (simply-cpp-pdflite 4.6.0)", their versions.
-            std::map<std::string, std::string> metadata;
-            /// Passwords and rights; none leaves the file unencrypted.
-            std::optional<pdflite::protection> protection;
-            /// Text in PDF's built-in fonts (Helvetica, Times, Courier), which every reader has:
-            /// nothing embedded, smaller files. CSS families map to them (Arial and sans-serif to
-            /// Helvetica, Times New Roman and serif to Times, Courier New and monospace to Courier;
-            /// another installed family stays itself, embedded), measured with Adobe's metrics.
-            /// Characters outside Windows-1252 are embedded from an installed font.
-            bool builtin_fonts = false;
-            /// Whether a box's background, border or image may be cut across two pages, as browsers
-            /// print them. By default one that fits on a page moves to the next one whole, with
-            /// what's in it.
-            bool split_boxes = false;
-            /// Outlines the margins, header and footer areas, to check a layout.
-            bool draw_margins = false;
-            /// PNG images are written at most about this many pixels per inch, at the biggest size
-            /// they're shown: bigger ones are scaled down (sc::pdflite::writer::image_resolution()). JPEGs are
-            /// written as they are. 0 keeps every image as it is.
-            double image_resolution = 150;
-        };
-
-        /// Where the content was cut: each page's top and bottom in the laid out content (px).
-        struct cut {
-            double top;
-            double bottom;
-        };
-
         /// Lays out the content (and header and footer) and cuts it into pages.
-        explicit html2pdf(std::string_view html);
+        explicit converter(std::string_view html);
 
-        html2pdf(std::string_view html, options settings);
+        converter(std::string_view html, options settings);
 
         /// The same, calling check now and then while it lays out the document here and writes it
         /// in save() and bytes(): between its stages and for every page. To stop, check throws (a
         /// time limit passed, the reader went away); the exception comes out of the constructor,
         /// save() or bytes() as it is, and save() leaves no file. Laying out the content is one
         /// step: a check comes before and after it, not during it.
-        html2pdf(std::string_view html, options settings, std::function<void()> check);
+        converter(std::string_view html, options settings, std::function<void()> check);
 
-        html2pdf(html2pdf &&) noexcept;
-        html2pdf &operator=(html2pdf &&) noexcept;
-        ~html2pdf();
+        converter(converter &&) noexcept;
+        converter &operator=(converter &&) noexcept;
+        ~converter();
 
         /// Pages in all, the table of contents' included.
         [[nodiscard]] unsigned page_count() const;

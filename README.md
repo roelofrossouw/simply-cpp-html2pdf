@@ -28,7 +28,7 @@ settings.toc_page = 2;                                    // a table of contents
 settings.metadata["Author"] = "Accounts";
 settings.protection = sc::pdflite::protection{.user_password = "open"};
 
-const sc::html2pdf pdf{html, settings};                   // laid out and cut into pages
+const sc::html2pdf::converter pdf{html, settings};                   // laid out and cut into pages
 pdf.save("report.pdf");
 ```
 
@@ -72,7 +72,7 @@ contents, links and a QR code (a `qr:` image):
 <!-- sc-example: examples/sc-html2pdf-demo.cpp -->
 ```cpp
 // A qr: image is a QR code of what follows the comma, drawn as shapes: sharp at any size.
-std::string body = "<h1>A report</h1><p>Written by sc::html2pdf from HTML and CSS.</p>"
+std::string body = "<h1>A report</h1><p>Written by sc::html2pdf::converter from HTML and CSS.</p>"
                    "<p><img src='qr:correction=M,https://github.com/roelofrossouw/simply-cpp' style='width: 25mm'><br>"
                    "<small>Scan it for simply-cpp.</small></p>";
 for (const auto *part: {"Introduction", "Figures", "Conclusion"}) {
@@ -93,7 +93,7 @@ settings.footer = "<p style='font-size: 8pt; color: #999'>Made with simply-cpp</
 settings.margins.first_top = 20;
 settings.toc_page = 2;
 settings.metadata["Author"] = "sc-html2pdf-demo";
-const sc::html2pdf pdf{body, settings};
+const sc::html2pdf::converter pdf{body, settings};
 SC_SHOW(pdf.page_count());
 pdf.save(output);
 ```
